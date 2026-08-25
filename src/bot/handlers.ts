@@ -15,6 +15,7 @@ import {
   postsKeyboard,
   postButtonsKeyboard,
   previewKeyboard,
+  previewKeyboardForButtons,
   publishTargetsKeyboard,
   settingsKeyboard,
   scheduledPostsKeyboard,
@@ -143,27 +144,70 @@ async function editContentPrompt(ctx: Context, repository: Repository, draft: Dr
   else await ctx.reply("Send the new caption.", { reply_markup: cancelKeyboard() })
 }
 
-async function sendPreview(ctx: Context, telegram: TelegramService, draft: Draft): Promise<void> {
+async function sendPreview(ctx: Context, repository: Repository, telegram: TelegramService, draft: Draft): Promise<void> {
   const text = draftText(draft)
-  const markup = postButtonsKeyboard(draft.buttons)
-  if (draft.content_type === "text") {
-    await telegram.sendMessage(ctx.chat!.id, text || "(No text yet)", { parse_mode: "HTML", reply_markup: markup })
-  } else if (!draft.telegram_file_id) {
-    await ctx.reply("Add the media before previewing this draft.", { reply_markup: cancelKeyboard() })
-    return
-  } else if (draft.content_type === "photo") {
-    await telegram.sendPhoto(ctx.chat!.id, draft.telegram_file_id, {
+  const markup = previewKeyboardForButtons(draft.buttons)
+  const chatId = ctx.chat!.id
+  const previewChatId = typeof draft.metadata.previewChatId === "number" ? draft.metadata.previewChatId : chatId
+  const existingMessageId = previewChatId === chatId && typeof draft.metadata.previewMessageId === "number" ? draft.metadata.previewMessageId : undefined
+  const previousContentType = typeof draft.metadata.previewContentType === "string" ? draft.metadata.previewContentType : undefined
+  const previousFileId = typeof draft.metadata.previewFileId === "string" ? draft.metadata.previewFileId : undefined
+  let messageId = existingMessageId
+
+  const sendNew = async (): Promise<number> => {
+    if (draft.content_type === "text") {
+      const sent = await telegram.sendMessage(chatId, text || "(No text yet)", { parse_mode: "HTML", reply_markup: markup })
+      return sent.message_id
+    }
+    if (!draft.telegram_file_id) {
+      await ctx.reply("Add the media before previewing this draft.", { reply_markup: cancelKeyboard() })
+      return 0
+    }
+    const options = {
       ...(text ? { caption: text, parse_mode: "HTML" } : {}),
       reply_markup: markup,
-    })
-  } else {
-    await telegram.sendVideo(ctx.chat!.id, draft.telegram_file_id, {
-      ...(text ? { caption: text, parse_mode: "HTML" } : {}),
-      reply_markup: markup,
-    })
+    }
+    if (draft.content_type === "photo") return (await telegram.sendPhoto(chatId, draft.telegram_file_id, options)).message_id
+    if (draft.content_type === "video") return (await telegram.sendVideo(chatId, draft.telegram_file_id, options)).message_id
+    return (await telegram.sendAnimation(chatId, draft.telegram_file_id, options)).message_id
   }
-  await ctx.reply("👀 Preview\n\nThe preview above uses the same formatting and buttons that publishing will use.", {
-    reply_markup: previewKeyboard(),
+
+  if (existingMessageId) {
+    try {
+      if (draft.content_type === "text") {
+        await telegram.editMessageText(chatId, existingMessageId, text || "(No text yet)", { parse_mode: "HTML", reply_markup: markup })
+      } else if (previousContentType !== draft.content_type || previousFileId !== draft.telegram_file_id) {
+        await telegram.editMessageMedia(chatId, existingMessageId, {
+          type: draft.content_type === "photo" ? "photo" : draft.content_type === "video" ? "video" : "animation",
+          media: draft.telegram_file_id!,
+          ...(text ? { caption: text, parse_mode: "HTML" } : {}),
+        }, { reply_markup: markup })
+      } else {
+        await telegram.editMessageCaption(chatId, existingMessageId, {
+          ...(text ? { caption: text, parse_mode: "HTML" } : { caption: "" }),
+          reply_markup: markup,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ""
+      if (!message.toLowerCase().includes("message is not modified")) {
+        try {
+          await telegram.deleteMessage(chatId, existingMessageId)
+        } catch {
+          // The old preview may already have been removed by the user.
+        }
+        messageId = await sendNew()
+      }
+    }
+  } else {
+    messageId = await sendNew()
+  }
+
+  if (!messageId) {
+    return
+  }
+  await repository.updateDraft(draft.id, {
+    metadata: { ...draft.metadata, previewMessageId: messageId, previewChatId: chatId, previewContentType: draft.content_type, previewFileId: draft.telegram_file_id },
   })
 }
 
@@ -192,7 +236,11 @@ async function sendPost(telegram: TelegramService, chatId: number, post: Publish
       reply_markup: markup,
     })
   }
-  return telegram.sendVideo(chatId, post.telegram_file_id!, {
+  if (post.content_type === "video") return telegram.sendVideo(chatId, post.telegram_file_id!, {
+    ...(text ? { caption: text, parse_mode: "HTML" } : {}),
+    reply_markup: markup,
+  })
+  return telegram.sendAnimation(chatId, post.telegram_file_id!, {
     ...(text ? { caption: text, parse_mode: "HTML" } : {}),
     reply_markup: markup,
   })
@@ -508,7 +556,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         if (!draft) {
           await startDraft(ctx, repository, true)
         } else if (draft.state === "preview") {
-          await sendPreview(ctx, telegram, draft)
+          await sendPreview(ctx, repository, telegram, draft)
         } else if (draft.state === "button_menu") {
           await showButtonMenu(ctx, repository, draft)
         } else {
@@ -582,7 +630,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
           return
         }
         const next = await repository.updateDraft(draft.id, { state: "preview" })
-        await sendPreview(ctx, telegram, next)
+        await sendPreview(ctx, repository, telegram, next)
         return
       }
       const move = data.match(/^button:move:(up|down):(\d+)$/)
@@ -630,7 +678,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       }
       if (data === "preview:refresh") {
         const draft = await repository.getDraft(id)
-        if (draft) await sendPreview(ctx, telegram, draft)
+        if (draft) await sendPreview(ctx, repository, telegram, draft)
         return
       }
       if (data === "preview:template") return showTemplates(ctx, repository)
@@ -753,6 +801,23 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         state: "waiting_caption",
       })
       await ctx.reply("✅ Video added. Send a caption, or skip it.", { reply_markup: skipKeyboard("caption:skip") })
+    } catch (error) {
+      await replyError(ctx, error)
+    }
+  })
+
+  bot.on("message:animation", async (ctx) => {
+    try {
+      const id = await ensureUser(ctx, repository)
+      let draft = await repository.getDraft(id)
+      if (!draft) draft = await repository.createDraft(id, "animation", "waiting_caption")
+      draft = await repository.updateDraft(draft.id, {
+        content_type: "animation",
+        telegram_file_id: ctx.message.animation.file_id,
+        telegram_file_unique_id: ctx.message.animation.file_unique_id,
+        state: "waiting_caption",
+      })
+      await ctx.reply("✅ Animation added. Send a caption, or skip it.", { reply_markup: skipKeyboard("caption:skip") })
     } catch (error) {
       await replyError(ctx, error)
     }

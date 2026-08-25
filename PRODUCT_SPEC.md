@@ -42,6 +42,7 @@ Buttons:
 - 📝 Text Post
 - 🖼️ Photo Post
 - 🎥 Video Post
+- 🎞️ Animation Post
 
 Also accept direct media uploads so the user does not have to start with the menu.
 
@@ -97,6 +98,7 @@ Buttons:
 ❌ Cancel
 
 Preview must use the same formatting/parser that publishing uses.
+URL buttons and preview controls should be attached to the same Telegram message.
 
 ### Step 5 — Publish
 Ask where to publish.

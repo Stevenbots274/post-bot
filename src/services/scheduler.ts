@@ -49,8 +49,13 @@ export class Scheduler {
             ...(text ? { caption: text, parse_mode: "HTML" } : {}),
             reply_markup: markup,
           })
-        } else {
+        } else if (post.content_type === "video") {
           sent = await this.telegram.sendVideo(schedule.chat_id, post.telegram_file_id!, {
+            ...(text ? { caption: text, parse_mode: "HTML" } : {}),
+            reply_markup: markup,
+          })
+        } else {
+          sent = await this.telegram.sendAnimation(schedule.chat_id, post.telegram_file_id!, {
             ...(text ? { caption: text, parse_mode: "HTML" } : {}),
             reply_markup: markup,
           })

@@ -18,7 +18,7 @@ create table if not exists public.users (
 create table if not exists public.drafts (
   id uuid primary key default gen_random_uuid(),
   telegram_user_id bigint not null references public.users(telegram_user_id) on delete cascade,
-  content_type text not null check (content_type in ('text','photo','video')),
+  content_type text not null check (content_type in ('text','photo','video','animation')),
   body text,
   caption text,
   telegram_file_id text,
@@ -84,6 +84,11 @@ create table if not exists public.posts (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Apply this constraint when upgrading an existing database created by V1.
+alter table public.drafts drop constraint if exists drafts_content_type_check;
+alter table public.drafts add constraint drafts_content_type_check
+  check (content_type in ('text','photo','video','animation'));
 
 create table if not exists public.scheduled_posts (
   id uuid primary key default gen_random_uuid(),

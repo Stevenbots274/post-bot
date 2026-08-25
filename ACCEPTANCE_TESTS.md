@@ -14,6 +14,7 @@
 ## Media
 [ ] Photo can be uploaded.
 [ ] Video can be uploaded.
+[ ] Animation/GIF can be uploaded.
 [ ] Caption can be added.
 [ ] Media preview works.
 [ ] Telegram file_id is retained.
@@ -30,6 +31,7 @@
 ## Editing
 [ ] Content can be edited before publish.
 [ ] Buttons can be edited before publish.
+[ ] Refresh and edits update the existing preview message instead of creating another preview.
 [ ] Quick Publish can start a text post with inline text.
 [ ] Draft survives a temporary error.
 [ ] Cancel deletes/abandons the active draft safely.

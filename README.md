@@ -6,15 +6,16 @@ Core flow: **Create -> Format -> Buttons -> Preview -> Publish**
 
 ## Features
 
-- Text, photo, and video drafts using Telegram `file_id` values.
+- Text, photo, video, and animation/GIF drafts using Telegram `file_id` values.
 - One canonical safe formatter for bold, italic, strikethrough, inline code, and HTTPS links.
 - HTTPS URL buttons rendered as Telegram `InlineKeyboardMarkup`, never fake Markdown links.
 - Two buttons per row and up to eight buttons per post.
-- Preview, content editing, button editing/deletion, clear, and cancel.
+- Preview, content editing, button editing/deletion, clear, and cancel in one editable preview message.
 - Built-in templates plus personal saved templates.
 - Persisted scheduled publishing with UTC time input and cancellation.
 - Channel-sync publishing to every registered target with per-target permission checks.
 - Clone any recent post into a new editable draft.
+- URL buttons and edit/publish controls appear together on the preview message.
 - Private-chat publishing and explicitly registered group/channel targets.
 - Bot permission checks before target publishing.
 - Supabase persistence for users, drafts, templates, targets, posts, publications, and processed updates.

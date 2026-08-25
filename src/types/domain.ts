@@ -1,4 +1,4 @@
-export type ContentType = "text" | "photo" | "video"
+export type ContentType = "text" | "photo" | "video" | "animation"
 
 export type DraftState =
   | "creating"

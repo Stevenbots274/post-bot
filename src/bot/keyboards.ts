@@ -24,6 +24,8 @@ export function contentTypeKeyboard(): InlineKeyboard {
     .text("🖼️ Photo Post", "content:photo")
     .text("🎥 Video Post", "content:video")
     .row()
+    .text("🎞️ Animation Post", "content:animation")
+    .row()
     .text("❌ Cancel", "flow:cancel")
 }
 
@@ -68,17 +70,24 @@ export function postButtonsKeyboard(buttons: ButtonDefinition[]): InlineKeyboard
   const keyboard = new InlineKeyboard()
   const rows = new Map<number, ButtonDefinition[]>()
   for (const button of buttons) rows.set(button.row, [...(rows.get(button.row) ?? []), button])
-  for (const row of [...rows.keys()].sort((a, b) => a - b)) {
+  const rowKeys = [...rows.keys()].sort((a, b) => a - b)
+  rowKeys.forEach((row, index) => {
     for (const button of (rows.get(row) ?? []).sort((a, b) => a.position - b.position)) {
       keyboard.url(button.label, button.url)
     }
-    keyboard.row()
-  }
+    if (index < rowKeys.length - 1) keyboard.row()
+  })
   return keyboard
 }
 
 export function previewKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
+  return previewKeyboardForButtons([])
+}
+
+export function previewKeyboardForButtons(buttons: ButtonDefinition[]): InlineKeyboard {
+  const keyboard = postButtonsKeyboard(buttons)
+  if (keyboard.inline_keyboard.length) keyboard.row()
+  return keyboard
     .text("✏️ Edit Content", "preview:edit_content")
     .text("🔘 Edit Buttons", "preview:edit_buttons")
     .row()

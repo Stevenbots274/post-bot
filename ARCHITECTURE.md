@@ -37,7 +37,7 @@ src/
   services/
     telegram/
     formatter/
-    whatsapp/
+    schedule/
     validation/
   db/
     repositories/
@@ -85,6 +85,8 @@ sendVideo
 editMessageText
 editMessageCaption
 editMessageReplyMarkup
+editMessageMedia
+sendAnimation
 sendChatAction
 getChat
 getMe

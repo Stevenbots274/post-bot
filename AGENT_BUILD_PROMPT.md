@@ -14,7 +14,7 @@ IMPORTANT:
 2. Configure webhook handling.
 3. Implement /start, /help, /create, /buttons, /templates, /settings, /cancel.
 4. Implement stateful draft creation.
-5. Support text, photo, and video posts.
+5. Support text, photo, video, and animation posts.
 6. Support safe Telegram formatting.
 7. Implement real Telegram inline URL buttons.
 8. Implement HTTPS URL button generation with safe validation.
@@ -28,6 +28,8 @@ IMPORTANT:
 16. Implement rate limiting and validation.
 17. Add friendly error handling.
 18. Test every acceptance test.
+
+Preview URL buttons and edit/publish controls should share one Telegram message. Refreshes and compatible edits should update it in place rather than sending another preview.
 
 The implementation may additionally support persisted scheduled publishing, cloning recent posts, and publishing to all explicitly registered targets. Keep these actions authorization-checked and idempotent.
 
