@@ -1,4 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import { MongoRepository } from "./mongo-repository.js"
+import { NeonRepository } from "./neon-repository.js"
 import type {
   ButtonDefinition,
   ContentType,
@@ -13,6 +15,55 @@ import type {
 } from "../types/domain.js"
 
 type Row = Record<string, any>
+
+export type DatabaseProvider = "supabase" | "neon" | "mongodb"
+
+export interface DatabaseConfig {
+  provider: DatabaseProvider
+  supabaseUrl?: string
+  supabaseServiceRoleKey?: string
+  databaseUrl?: string
+  mongodbUri?: string
+  mongodbDatabase?: string
+}
+
+export type UserSettingsPatch = {
+  autoButtons?: ButtonDefinition[]
+  pendingAutoButton?: UserSettings["pendingAutoButton"] | null
+}
+
+export interface Repository {
+  upsertUser(user: TelegramUser): Promise<void>
+  getUserSettings(userId: number): Promise<UserSettings>
+  updateUserSettings(userId: number, patch: UserSettingsPatch): Promise<UserSettings>
+  getDraft(userId: number): Promise<Draft | null>
+  createDraft(userId: number, contentType: ContentType, state: DraftState, buttons?: ButtonDefinition[]): Promise<Draft>
+  updateDraft(id: string, patch: Partial<Pick<Draft, "content_type" | "body" | "caption" | "telegram_file_id" | "telegram_file_unique_id" | "buttons" | "state" | "metadata">>): Promise<Draft>
+  deleteDraft(id: string): Promise<void>
+  createPost(draft: Draft, status?: string): Promise<{ id: string }>
+  schedulePost(draft: Draft, chatId: number, scheduledFor: string): Promise<{ id: string }>
+  listDueSchedules(now?: string): Promise<ScheduledPost[]>
+  claimSchedule(id: string): Promise<ScheduledPost | null>
+  getPost(postId: string): Promise<StoredPost | null>
+  getPostForUser(postId: string, userId: number): Promise<StoredPost | null>
+  updateScheduledPost(id: string, patch: { status: ScheduledPost["status"]; telegram_message_id?: number; error_message?: string }): Promise<void>
+  listScheduledPosts(userId: number): Promise<ScheduledPost[]>
+  cancelScheduledPost(id: string, userId: number): Promise<boolean>
+  updatePostStatus(postId: string, status: string): Promise<void>
+  claimPublication(postId: string, userId: number, chatId: number): Promise<{ id: string } | null>
+  updatePublication(publicationId: string, patch: { status: string; telegram_message_id?: number; error_code?: string; error_message?: string }): Promise<void>
+  listTargets(userId: number): Promise<PublishTarget[]>
+  getTarget(id: string, userId: number): Promise<PublishTarget | null>
+  registerTarget(target: Omit<PublishTarget, "id">): Promise<void>
+  deleteTarget(id: string, userId: number): Promise<boolean>
+  listTemplates(userId: number): Promise<Template[]>
+  getTemplate(id: string, userId: number): Promise<Template | null>
+  saveTemplate(input: Omit<Template, "id" | "is_public">): Promise<void>
+  listPosts(userId: number): Promise<Array<{ id: string; content_type: ContentType; status: string; created_at: string }>>
+  claimUpdate(updateId: number): Promise<boolean>
+  releaseUpdate(updateId: number): Promise<void>
+  deleteUserData(userId: number): Promise<void>
+}
 
 function mapDraft(row: Row): Draft {
   return {
@@ -34,7 +85,7 @@ function mapUserSettings(row: Row | null): UserSettings {
   }
 }
 
-export class Repository {
+export class SupabaseRepository implements Repository {
   private readonly db: SupabaseClient
 
   constructor(url: string, serviceRoleKey: string) {
@@ -379,4 +430,17 @@ export class Repository {
       if (error) throw new Error(`data deletion failed: ${error.message}`)
     }
   }
+}
+
+export function createRepository(config: DatabaseConfig): Repository {
+  if (config.provider === "supabase") {
+    if (!config.supabaseUrl || !config.supabaseServiceRoleKey) throw new Error("Supabase requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
+    return new SupabaseRepository(config.supabaseUrl, config.supabaseServiceRoleKey)
+  }
+  if (config.provider === "neon") {
+    if (!config.databaseUrl) throw new Error("Neon requires DATABASE_URL")
+    return new NeonRepository(config.databaseUrl)
+  }
+  if (!config.mongodbUri) throw new Error("MongoDB requires MONGODB_URI")
+  return new MongoRepository(config.mongodbUri, config.mongodbDatabase || "post_bot")
 }

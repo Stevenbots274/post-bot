@@ -1,5 +1,5 @@
--- POST BOT — Supabase schema
--- Apply in Supabase SQL editor.
+-- POST BOT — PostgreSQL schema for Supabase and Neon
+-- Apply in the Supabase or Neon SQL editor.
 
 create extension if not exists pgcrypto;
 

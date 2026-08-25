@@ -1,13 +1,13 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { timingSafeEqual } from "node:crypto"
 import { env } from "./config/env.js"
-import { Repository } from "./db/repository.js"
+import { createRepository } from "./db/repository.js"
 import { buildBot } from "./bot/handlers.js"
 import { RateLimiter } from "./services/rate-limit.js"
 import { TelegramService } from "./services/telegram.js"
 import { Scheduler } from "./services/scheduler.js"
 
-const repository = new Repository(env.supabaseUrl, env.supabaseServiceRoleKey)
+const repository = createRepository(env.database)
 const bot = buildBot(repository, env.telegramBotToken)
 const scheduler = new Scheduler(repository, new TelegramService(bot.api))
 const ipLimiter = new RateLimiter(120, 60_000)

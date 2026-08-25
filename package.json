@@ -15,11 +15,14 @@
     "set-webhook": "tsx scripts/set-webhook.ts"
   },
   "dependencies": {
+    "mongodb": "^6.13.0",
+    "pg": "^8.13.1",
     "@supabase/supabase-js": "^2.49.1",
     "dotenv": "^16.4.7",
     "grammy": "^1.35.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.11.11",
     "@types/node": "^22.13.4",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"

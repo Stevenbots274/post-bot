@@ -20,7 +20,8 @@ Core flow: **Create -> Format -> Buttons -> Preview -> Publish**
 - URL buttons and edit/publish controls appear together on the preview message.
 - Private-chat publishing and explicitly registered group/channel targets.
 - Bot permission checks before target publishing.
-- Supabase persistence for users, drafts, templates, targets, posts, publications, and processed updates.
+- Provider-neutral persistence for users, drafts, templates, targets, posts, publications, and processed updates.
+- Supabase, Neon/PostgreSQL, or MongoDB can be selected with `DB_PROVIDER`.
 - Webhook secret validation, bounded requests, URL validation, rate limits, and duplicate-update/publish protection.
 
 ## Requirements
@@ -37,9 +38,9 @@ npm install
 cp .env.example .env
 ```
 
-Fill in `.env` with the Telegram and Supabase values. Apply [`DATABASE.sql`](./DATABASE.sql) in the Supabase SQL editor.
+Fill in `.env` with the Telegram and selected database provider values. Apply [`DATABASE.sql`](./DATABASE.sql) in Supabase or Neon; MongoDB initializes its collections and indexes on startup.
 
-Run the SQL file again after upgrading so the `users.settings` column is added for Auto Buttons.
+For Supabase or Neon upgrades, run the SQL file again so the `users.settings` column is added for Auto Buttons.
 
 ## Development
 
@@ -59,7 +60,7 @@ The HTTP server exposes `GET /health` and the protected `POST /telegram/webhook`
 4. Run `npm run set-webhook` once after deployment.
 5. Add the bot to a group or channel as an administrator, then send `/register` there. Only registered targets appear during publishing.
 
-See [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) for webhook, migration, logging, and launch guidance.
+See [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) for Supabase, webhook, logging, and provider-specific launch guidance for Railway, Koyeb, Render, and Fly.io.
 
 ## Bot commands
 
