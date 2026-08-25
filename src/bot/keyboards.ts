@@ -142,6 +142,32 @@ export function templatesKeyboard(saved: Template[]): InlineKeyboard {
   return keyboard
 }
 
-export function settingsKeyboard(): InlineKeyboard {
-  return new InlineKeyboard().text("🧹 Delete My Drafts", "settings:clear_drafts").row().text("❌ Cancel", "flow:cancel")
+export function settingsKeyboard(autoButtonCount = 0, targetCount = 0): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(`⚡ Auto Buttons${autoButtonCount ? ` (${autoButtonCount})` : ""}`, "settings:auto_buttons")
+    .row()
+    .text(`📣 Publishing Targets${targetCount ? ` (${targetCount})` : ""}`, "settings:targets")
+    .row()
+    .text("🧹 Delete My Drafts", "settings:clear_drafts")
+    .row()
+    .text("❌ Cancel", "flow:cancel")
+}
+
+export function autoButtonsKeyboard(buttons: ButtonDefinition[]): InlineKeyboard {
+  const keyboard = new InlineKeyboard()
+  buttons.forEach((button, index) => keyboard.text(`🗑️ ${index + 1}. ${button.label.slice(0, 28)}`, `settings:auto:delete:${index}`).row())
+  if (buttons.length < 8) keyboard.text("🔗 Add Auto Button", "settings:auto:add").row()
+  if (buttons.length) keyboard.text("🧹 Clear Auto Buttons", "settings:auto:clear").row()
+  keyboard.text("⬅️ Settings", "settings:home")
+  return keyboard
+}
+
+export function targetsKeyboard(targets: PublishTarget[]): InlineKeyboard {
+  const keyboard = new InlineKeyboard()
+  for (const target of targets) {
+    const name = target.chat_title || (target.chat_username ? `@${target.chat_username}` : String(target.chat_id))
+    keyboard.text(`🗑️ Remove ${name.slice(0, 35)}`, `settings:target:remove:${target.id}`).row()
+  }
+  keyboard.text("⬅️ Settings", "settings:home")
+  return keyboard
 }

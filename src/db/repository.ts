@@ -9,6 +9,7 @@ import type {
   StoredPost,
   TelegramUser,
   Template,
+  UserSettings,
 } from "../types/domain.js"
 
 type Row = Record<string, any>
@@ -23,6 +24,14 @@ function mapDraft(row: Row): Draft {
 
 function mapTemplate(row: Row): Template {
   return { ...row, buttons: Array.isArray(row.buttons) ? row.buttons : [] } as Template
+}
+
+function mapUserSettings(row: Row | null): UserSettings {
+  const settings = row?.settings && typeof row.settings === "object" ? row.settings : {}
+  return {
+    autoButtons: Array.isArray(settings.autoButtons) ? settings.autoButtons : [],
+    ...(settings.pendingAutoButton ? { pendingAutoButton: settings.pendingAutoButton } : {}),
+  }
 }
 
 export class Repository {
@@ -49,6 +58,29 @@ export class Repository {
     if (error) throw new Error(`user upsert failed: ${error.message}`)
   }
 
+  async getUserSettings(userId: number): Promise<UserSettings> {
+    const { data, error } = await this.db.from("users").select("settings").eq("telegram_user_id", userId).maybeSingle()
+    if (error) throw new Error(`settings lookup failed: ${error.message}`)
+    return mapUserSettings(data)
+  }
+
+  async updateUserSettings(
+    userId: number,
+    patch: { autoButtons?: ButtonDefinition[]; pendingAutoButton?: UserSettings["pendingAutoButton"] | null },
+  ): Promise<UserSettings> {
+    const current = await this.getUserSettings(userId)
+    const next: UserSettings = { ...current }
+    if (patch.autoButtons) next.autoButtons = patch.autoButtons
+    if (patch.pendingAutoButton === null) delete next.pendingAutoButton
+    else if (patch.pendingAutoButton) next.pendingAutoButton = patch.pendingAutoButton
+    const { error } = await this.db
+      .from("users")
+      .update({ settings: next, updated_at: new Date().toISOString() })
+      .eq("telegram_user_id", userId)
+    if (error) throw new Error(`settings update failed: ${error.message}`)
+    return next
+  }
+
   async getDraft(userId: number): Promise<Draft | null> {
     const { data, error } = await this.db
       .from("drafts")
@@ -61,10 +93,10 @@ export class Repository {
     return data ? mapDraft(data) : null
   }
 
-  async createDraft(userId: number, contentType: ContentType, state: DraftState): Promise<Draft> {
+  async createDraft(userId: number, contentType: ContentType, state: DraftState, buttons: ButtonDefinition[] = []): Promise<Draft> {
     const { data, error } = await this.db
       .from("drafts")
-      .insert({ telegram_user_id: userId, content_type: contentType, state })
+      .insert({ telegram_user_id: userId, content_type: contentType, state, buttons })
       .select("*")
       .single()
     if (error || !data) throw new Error(`draft creation failed: ${error?.message ?? "empty response"}`)
@@ -278,6 +310,18 @@ export class Repository {
       { onConflict: "telegram_user_id,chat_id" },
     )
     if (error) throw new Error(`target registration failed: ${error.message}`)
+  }
+
+  async deleteTarget(id: string, userId: number): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("publish_targets")
+      .delete()
+      .eq("id", id)
+      .eq("telegram_user_id", userId)
+      .select("id")
+      .maybeSingle()
+    if (error) throw new Error(`target deletion failed: ${error.message}`)
+    return Boolean(data)
   }
 
   async listTemplates(userId: number): Promise<Template[]> {

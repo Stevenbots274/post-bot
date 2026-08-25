@@ -15,6 +15,8 @@ create table if not exists public.users (
   updated_at timestamptz not null default now()
 );
 
+alter table public.users add column if not exists settings jsonb not null default '{}'::jsonb;
+
 create table if not exists public.drafts (
   id uuid primary key default gen_random_uuid(),
   telegram_user_id bigint not null references public.users(telegram_user_id) on delete cascade,

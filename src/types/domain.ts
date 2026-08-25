@@ -8,8 +8,6 @@ export type DraftState =
   | "button_menu"
   | "waiting_button_label"
   | "waiting_button_url"
-  | "waiting_wa_phone"
-  | "waiting_wa_message"
   | "preview"
   | "publish_target"
   | "publishing"
@@ -87,4 +85,14 @@ export interface TelegramUser {
   first_name?: string
   last_name?: string
   language_code?: string
+}
+
+export interface PendingAutoButton {
+  stage: "label" | "url"
+  label?: string
+}
+
+export interface UserSettings {
+  autoButtons: ButtonDefinition[]
+  pendingAutoButton?: PendingAutoButton
 }

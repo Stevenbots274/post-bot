@@ -14,6 +14,8 @@ Core flow: **Create -> Format -> Buttons -> Preview -> Publish**
 - Built-in templates plus personal saved templates.
 - Persisted scheduled publishing with UTC time input and cancellation.
 - Channel-sync publishing to every registered target with per-target permission checks.
+- Auto Buttons saved in Settings and copied into newly created drafts.
+- Publishing target management, including removing old targets from future publish menus.
 - Clone any recent post into a new editable draft.
 - URL buttons and edit/publish controls appear together on the preview message.
 - Private-chat publishing and explicitly registered group/channel targets.
@@ -36,6 +38,8 @@ cp .env.example .env
 ```
 
 Fill in `.env` with the Telegram and Supabase values. Apply [`DATABASE.sql`](./DATABASE.sql) in the Supabase SQL editor.
+
+Run the SQL file again after upgrading so the `users.settings` column is added for Auto Buttons.
 
 ## Development
 
@@ -64,6 +68,7 @@ See [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) for webhook, migration, logging
 Every flow includes a Cancel action. Invalid URLs are rejected without losing the draft.
 
 Use **Publish to All Targets** from the publish screen for channel-sync behavior. Use **Clone** from `/posts` to reuse a prior post without changing the original.
+Use **Settings -> Auto Buttons** to save URL buttons that should appear on new drafts. Use **Settings -> Publishing Targets** to remove targets that should no longer appear in publish menus.
 
 ## Security notes
 

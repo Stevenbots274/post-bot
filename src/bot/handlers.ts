@@ -12,6 +12,7 @@ import {
   contentTypeKeyboard,
   draftConflictKeyboard,
   mainMenuKeyboard,
+  autoButtonsKeyboard,
   postsKeyboard,
   postButtonsKeyboard,
   previewKeyboard,
@@ -20,6 +21,7 @@ import {
   settingsKeyboard,
   scheduledPostsKeyboard,
   skipKeyboard,
+  targetsKeyboard,
   templatesKeyboard,
 } from "./keyboards.js"
 
@@ -95,6 +97,37 @@ async function showMainMenu(ctx: Context): Promise<void> {
   await ctx.reply("Choose an action:", { reply_markup: mainMenuKeyboard() })
 }
 
+async function createDraftWithAutoButtons(repository: Repository, userId: number, contentType: ContentType, state: Draft["state"]): Promise<Draft> {
+  const settings = await repository.getUserSettings(userId)
+  return repository.createDraft(userId, contentType, state, settings.autoButtons)
+}
+
+async function showSettings(ctx: Context, repository: Repository): Promise<void> {
+  const id = userId(ctx)
+  const [settings, targets] = await Promise.all([repository.getUserSettings(id), repository.listTargets(id)])
+  const autoButtons = settings.autoButtons.length ? buttonSummary(settings.autoButtons) : "None configured."
+  await ctx.reply(
+    `⚙️ Settings\n\n⚡ Auto Buttons (${settings.autoButtons.length}/8)\n${autoButtons}\n\nAuto Buttons are copied into newly created drafts. Existing drafts are unchanged.\n\n📣 Publishing targets: ${targets.length}`,
+    { reply_markup: settingsKeyboard(settings.autoButtons.length, targets.length) },
+  )
+}
+
+async function showAutoButtons(ctx: Context, repository: Repository): Promise<void> {
+  const settings = await repository.getUserSettings(userId(ctx))
+  await ctx.reply(
+    `⚡ Auto Buttons\n\n${settings.autoButtons.length ? buttonSummary(settings.autoButtons) : "No Auto Buttons configured."}\n\nThese URL buttons are copied into every new draft.`,
+    { reply_markup: autoButtonsKeyboard(settings.autoButtons) },
+  )
+}
+
+async function showTargets(ctx: Context, repository: Repository): Promise<void> {
+  const targets = await repository.listTargets(userId(ctx))
+  const description = targets.length
+    ? targets.map((target, index) => `${index + 1}. ${target.chat_title || (target.chat_username ? `@${target.chat_username}` : target.chat_id)}`).join("\n")
+    : "No publishing targets registered. Use /register inside a group or channel where the bot can post."
+  await ctx.reply(`📣 Publishing Targets\n\n${description}\n\nRemoving a target only hides it from future publish menus.`, { reply_markup: targetsKeyboard(targets) })
+}
+
 async function showButtonMenu(ctx: Context, repository: Repository, draft: Draft): Promise<void> {
   const current = draft.state === "button_menu" ? draft : await repository.updateDraft(draft.id, { state: "button_menu" })
   await ctx.reply(`🔘 Button builder\n\n${buttonSummary(current.buttons)}\n\nYou can add up to 8 buttons.`, {
@@ -110,7 +143,7 @@ async function startDraft(ctx: Context, repository: Repository, force = false): 
     return
   }
   if (existing) await repository.deleteDraft(existing.id)
-  await repository.createDraft(id, "text", "creating")
+  await createDraftWithAutoButtons(repository, id, "text", "creating")
   await ctx.reply("What kind of post would you like to create?", { reply_markup: contentTypeKeyboard() })
 }
 
@@ -121,7 +154,7 @@ async function startQuickPublish(ctx: Context, repository: Repository, body = ""
     await ctx.reply("Finish or cancel your active draft before starting Quick Publish.", { reply_markup: draftConflictKeyboard() })
     return
   }
-  const draft = await repository.createDraft(id, "text", body ? "button_menu" : "waiting_content")
+  const draft = await createDraftWithAutoButtons(repository, id, "text", body ? "button_menu" : "waiting_content")
   if (body) {
     await showButtonMenu(ctx, repository, await repository.updateDraft(draft.id, { body }))
   } else {
@@ -132,7 +165,7 @@ async function startQuickPublish(ctx: Context, repository: Repository, body = ""
 async function startButtonBuilder(ctx: Context, repository: Repository): Promise<void> {
   const id = await ensureUser(ctx, repository)
   let draft = await repository.getDraft(id)
-  if (!draft) draft = await repository.createDraft(id, "text", "button_menu")
+  if (!draft) draft = await createDraftWithAutoButtons(repository, id, "text", "button_menu")
   await showButtonMenu(ctx, repository, draft)
 }
 
@@ -470,9 +503,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
   bot.command("settings", async (ctx) => {
     try {
       await ensureUser(ctx, repository)
-      await ctx.reply("Settings\n\nYour drafts and templates stay on the server only for bot operation. You can delete active drafts below.", {
-        reply_markup: settingsKeyboard(),
-      })
+      await showSettings(ctx, repository)
     } catch (error) {
       await replyError(ctx, error)
     }
@@ -501,7 +532,14 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
   })
   bot.command("cancel", async (ctx) => {
     try {
-      const draft = await repository.getDraft(await ensureUser(ctx, repository))
+      const id = await ensureUser(ctx, repository)
+      const settings = await repository.getUserSettings(id)
+      if (settings.pendingAutoButton) {
+        await repository.updateUserSettings(id, { pendingAutoButton: null })
+        await ctx.reply("Auto Button setup cancelled. Your draft is unchanged.", { reply_markup: mainMenuKeyboard() })
+        return
+      }
+      const draft = await repository.getDraft(id)
       if (draft) await repository.deleteDraft(draft.id)
       await ctx.reply("Current draft cancelled.", { reply_markup: mainMenuKeyboard() })
     } catch (error) {
@@ -542,6 +580,12 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       const id = await ensureUser(ctx, repository)
 
       if (data === "flow:cancel") {
+        const settings = await repository.getUserSettings(id)
+        if (settings.pendingAutoButton) {
+          await repository.updateUserSettings(id, { pendingAutoButton: null })
+          await ctx.reply("Auto Button setup cancelled. Your draft is unchanged.", { reply_markup: mainMenuKeyboard() })
+          return
+        }
         const draft = await repository.getDraft(id)
         if (draft) await repository.deleteDraft(draft.id)
         await ctx.reply("Current draft cancelled.", { reply_markup: mainMenuKeyboard() })
@@ -570,7 +614,43 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       if (data === "menu:templates") return showTemplates(ctx, repository)
       if (data === "menu:home") return showMainMenu(ctx)
       if (data === "menu:help") return ctx.reply(HELP_TEXT, { reply_markup: mainMenuKeyboard() })
-      if (data === "menu:settings") return ctx.reply("Settings\n\nDelete your active draft whenever you need.", { reply_markup: settingsKeyboard() })
+      if (data === "menu:settings") return showSettings(ctx, repository)
+      if (data === "settings:home") return showSettings(ctx, repository)
+      if (data === "settings:auto_buttons") return showAutoButtons(ctx, repository)
+      if (data === "settings:targets") return showTargets(ctx, repository)
+      if (data === "settings:auto:add") {
+        const settings = await repository.getUserSettings(id)
+        if (settings.autoButtons.length >= 8) {
+          await ctx.reply("You can save up to 8 Auto Buttons.", { reply_markup: autoButtonsKeyboard(settings.autoButtons) })
+          return
+        }
+        await repository.updateUserSettings(id, { pendingAutoButton: { stage: "label" } })
+        await ctx.reply("Send the visible label for this Auto Button, for example: Visit website", { reply_markup: cancelKeyboard() })
+        return
+      }
+      const autoButtonDelete = data.match(/^settings:auto:delete:(\d+)$/)
+      if (autoButtonDelete) {
+        const settings = await repository.getUserSettings(id)
+        const index = Number.parseInt(autoButtonDelete[1]!, 10)
+        if (!Number.isInteger(index) || !settings.autoButtons[index]) throw new Error("That Auto Button is no longer available")
+        const buttons = settings.autoButtons
+          .filter((_, current) => current !== index)
+          .map((button, current) => ({ ...button, row: Math.floor(current / 2), position: current % 2 }))
+        await repository.updateUserSettings(id, { autoButtons: buttons })
+        await showAutoButtons(ctx, repository)
+        return
+      }
+      if (data === "settings:auto:clear") {
+        await repository.updateUserSettings(id, { autoButtons: [] })
+        await showAutoButtons(ctx, repository)
+        return
+      }
+      const targetDelete = data.match(/^settings:target:remove:(.+)$/)
+      if (targetDelete) {
+        const removed = await repository.deleteTarget(targetDelete[1]!, id)
+        await ctx.reply(removed ? "✅ Publishing target removed." : "That publishing target is no longer registered.", { reply_markup: targetsKeyboard(await repository.listTargets(id)) })
+        return
+      }
       if (data === "menu:posts") {
         const posts = await repository.listPosts(id)
         await ctx.reply(posts.length ? posts.map((post, index) => `${index + 1}. ${post.content_type} · ${post.status}`).join("\n") : "You have no published posts yet.", {
@@ -774,7 +854,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
     try {
       const id = await ensureUser(ctx, repository)
       let draft = await repository.getDraft(id)
-      if (!draft) draft = await repository.createDraft(id, "photo", "waiting_caption")
+      if (!draft) draft = await createDraftWithAutoButtons(repository, id, "photo", "waiting_caption")
       const photo = ctx.message.photo[ctx.message.photo.length - 1]
       if (!photo) throw new Error("Photo is missing")
       draft = await repository.updateDraft(draft.id, {
@@ -793,7 +873,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
     try {
       const id = await ensureUser(ctx, repository)
       let draft = await repository.getDraft(id)
-      if (!draft) draft = await repository.createDraft(id, "video", "waiting_caption")
+      if (!draft) draft = await createDraftWithAutoButtons(repository, id, "video", "waiting_caption")
       draft = await repository.updateDraft(draft.id, {
         content_type: "video",
         telegram_file_id: ctx.message.video.file_id,
@@ -810,7 +890,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
     try {
       const id = await ensureUser(ctx, repository)
       let draft = await repository.getDraft(id)
-      if (!draft) draft = await repository.createDraft(id, "animation", "waiting_caption")
+      if (!draft) draft = await createDraftWithAutoButtons(repository, id, "animation", "waiting_caption")
       draft = await repository.updateDraft(draft.id, {
         content_type: "animation",
         telegram_file_id: ctx.message.animation.file_id,
@@ -828,6 +908,26 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       const id = await ensureUser(ctx, repository)
       const text = getMessageText(ctx.message)
       const draft = await repository.getDraft(id)
+      const settings = await repository.getUserSettings(id)
+      if (settings.pendingAutoButton?.stage === "label") {
+        const label = validateButtonLabel(text)
+        await repository.updateUserSettings(id, { pendingAutoButton: { stage: "url", label } })
+        await ctx.reply("Now send the full HTTPS URL for this Auto Button, for example https://example.com", { reply_markup: cancelKeyboard() })
+        return
+      }
+      if (settings.pendingAutoButton?.stage === "url") {
+        if (settings.autoButtons.length >= 8) {
+          await repository.updateUserSettings(id, { pendingAutoButton: null })
+          await ctx.reply("You can save up to 8 Auto Buttons. The setup was cancelled.", { reply_markup: autoButtonsKeyboard(settings.autoButtons) })
+          return
+        }
+        const url = validateHttpsUrl(text)
+        const label = settings.pendingAutoButton.label ?? "Open link"
+        const buttons = addButton(settings.autoButtons, { label, url, type: "url" })
+        await repository.updateUserSettings(id, { autoButtons: buttons, pendingAutoButton: null })
+        await showAutoButtons(ctx, repository)
+        return
+      }
       if (!draft) {
         await ctx.reply("Use /create to make a post, or choose an action below.", { reply_markup: mainMenuKeyboard() })
         return
