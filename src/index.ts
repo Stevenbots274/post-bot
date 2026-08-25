@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { timingSafeEqual } from "node:crypto"
+import { InputFile } from "grammy"
 import { env } from "./config/env.js"
 import { createRepository } from "./db/repository.js"
 import { buildBot } from "./bot/handlers.js"
@@ -93,18 +94,39 @@ const server = createServer(async (request, response) => {
   }
 })
 
-await bot.api.setMyCommands([
-  { command: "start", description: "Open the main menu" },
-  { command: "create", description: "Create a new post" },
-  { command: "quickpublish", description: "Start a fast text post" },
-  { command: "buttons", description: "Open the button builder" },
-  { command: "templates", description: "Use a template" },
-  { command: "posts", description: "View recent posts" },
-  { command: "scheduled", description: "Manage scheduled posts" },
-  { command: "settings", description: "Manage your data" },
-  { command: "help", description: "Show help" },
-  { command: "cancel", description: "Cancel the current flow" },
-])
+async function configureTelegram(): Promise<void> {
+  if (env.appUrl) {
+    const webhook = `${env.appUrl.replace(/\/$/, "")}${env.webhookPath}`
+    await bot.api.setWebhook(webhook, {
+      secret_token: env.telegramWebhookSecret,
+      allowed_updates: ["message", "callback_query"],
+      drop_pending_updates: false,
+    })
+    console.log(`Webhook configured: ${webhook}`)
+  }
+
+  await bot.api.setMyCommands([
+    { command: "start", description: "Open the main menu" },
+    { command: "create", description: "Create a new post" },
+    { command: "quickpublish", description: "Start a fast text post" },
+    { command: "buttons", description: "Open the button builder" },
+    { command: "templates", description: "Use a template" },
+    { command: "posts", description: "View recent posts" },
+    { command: "scheduled", description: "Manage scheduled posts" },
+    { command: "settings", description: "Manage your data" },
+    { command: "help", description: "Show help" },
+    { command: "cancel", description: "Cancel the current flow" },
+  ])
+
+  if (env.botName) await bot.api.setMyName(env.botName)
+  if (env.botDescription) await bot.api.setMyDescription(env.botDescription)
+  if (env.botShortDescription) await bot.api.setMyShortDescription(env.botShortDescription)
+  if (env.botProfilePhoto) {
+    await bot.api.setMyProfilePhoto({ type: "static", photo: new InputFile(env.botProfilePhoto) })
+  }
+}
+
+await configureTelegram()
 
 scheduler.start()
 

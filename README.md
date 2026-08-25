@@ -57,8 +57,9 @@ The HTTP server exposes `GET /health` and the protected `POST /telegram/webhook`
 1. Deploy the Node process with `npm run build` followed by `npm start`.
 2. Set every variable in `.env.example` in the hosting provider.
 3. Set `APP_URL` to the public HTTPS origin, without a trailing slash.
-4. Run `npm run set-webhook` once after deployment.
-5. Add the bot to a group or channel as an administrator, then send `/register` there. Only registered targets appear during publishing.
+4. Set `APP_URL` before the final deployment; startup automatically registers the Telegram webhook.
+5. Optionally set `BOT_NAME`, `BOT_DESCRIPTION`, `BOT_SHORT_DESCRIPTION`, and `BOT_PROFILE_PHOTO` to update the bot profile on startup.
+6. Add the bot to a group or channel as an administrator, then send `/register` there. Only registered targets appear during publishing.
 
 See [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) for Supabase, mobile migration, webhook, logging, and provider-specific launch guidance for Railway, Koyeb, Render, and Fly.io.
 

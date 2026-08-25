@@ -14,7 +14,7 @@ The `publications_active_post_target_idx` index makes concurrent publish clicks 
 
 ## Webhook
 
-The server accepts only `POST ${WEBHOOK_PATH}` and checks the `X-Telegram-Bot-Api-Secret-Token` header. `npm run set-webhook` configures both the URL and Telegram's matching `secret_token`.
+The server accepts only `POST ${WEBHOOK_PATH}` and checks the `X-Telegram-Bot-Api-Secret-Token` header. When `APP_URL` is set, startup automatically configures both the URL and Telegram's matching `secret_token`. `npm run set-webhook` remains available for manual recovery.
 
 Check the deployment with:
 
@@ -54,7 +54,7 @@ MONGODB_URI
 MONGODB_DATABASE   # optional, defaults to post_bot
 ```
 
-Optional variables are `WEBHOOK_PATH` (default `/telegram/webhook`), `BOT_USERNAME`, and `ADMIN_TELEGRAM_USER_IDS`. Do not add a trailing slash to `APP_URL`. Do not commit `.env` or any secret.
+Optional variables are `WEBHOOK_PATH` (default `/telegram/webhook`), `BOT_USERNAME`, `BOT_NAME`, `BOT_DESCRIPTION`, `BOT_SHORT_DESCRIPTION`, `BOT_PROFILE_PHOTO`, and `ADMIN_TELEGRAM_USER_IDS`. When supplied, the bot name, description, short description, and static profile photo are updated on every deployment. `BOT_PROFILE_PHOTO` accepts a public JPG URL or a JPG path included in the deployment. Do not add a trailing slash to `APP_URL`. Do not commit `.env` or any secret.
 
 Deploy one running instance for the first launch. The scheduler claims rows atomically, but multiple replicas are unnecessary for this bot and make operations harder to reason about.
 
@@ -98,7 +98,7 @@ Railway's service should remain at one replica because the bot includes the sche
 4. Add the common variables and the variables for your selected database provider. Leave `APP_PORT` unset so the service can use Koyeb's `PORT` value. Configure the service HTTP port according to the port shown by Koyeb; the application will read the injected port.
 5. Deploy the service and copy its public HTTPS domain into `APP_URL` without a trailing slash. Redeploy after saving the URL.
 6. Configure the health check path as `/health` and use one instance.
-7. Run `npm run set-webhook` once after the public domain is active.
+7. Redeploy after setting `APP_URL`; startup automatically registers the webhook and applies any configured bot profile settings.
 8. Verify the public `/health` URL returns a successful response.
 
 ## Render

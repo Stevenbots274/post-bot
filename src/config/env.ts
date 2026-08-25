@@ -31,6 +31,10 @@ export const env = {
   appPort: Number.parseInt(optional("APP_PORT", optional("PORT", "3000")), 10),
   appUrl: optional("APP_URL"),
   botUsername: optional("BOT_USERNAME"),
+  botName: optional("BOT_NAME"),
+  botDescription: optional("BOT_DESCRIPTION"),
+  botShortDescription: optional("BOT_SHORT_DESCRIPTION"),
+  botProfilePhoto: optional("BOT_PROFILE_PHOTO"),
   adminTelegramUserIds: optional("ADMIN_TELEGRAM_USER_IDS")
     .split(",")
     .map((value) => Number.parseInt(value.trim(), 10))
