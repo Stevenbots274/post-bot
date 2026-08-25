@@ -12,6 +12,7 @@ import {
   contentTypeKeyboard,
   draftConflictKeyboard,
   mainMenuKeyboard,
+  postsKeyboard,
   postButtonsKeyboard,
   previewKeyboard,
   publishTargetsKeyboard,
@@ -112,6 +113,21 @@ async function startDraft(ctx: Context, repository: Repository, force = false): 
   await ctx.reply("What kind of post would you like to create?", { reply_markup: contentTypeKeyboard() })
 }
 
+async function startQuickPublish(ctx: Context, repository: Repository, body = ""): Promise<void> {
+  const id = await ensureUser(ctx, repository)
+  const existing = await repository.getDraft(id)
+  if (existing) {
+    await ctx.reply("Finish or cancel your active draft before starting Quick Publish.", { reply_markup: draftConflictKeyboard() })
+    return
+  }
+  const draft = await repository.createDraft(id, "text", body ? "button_menu" : "waiting_content")
+  if (body) {
+    await showButtonMenu(ctx, repository, await repository.updateDraft(draft.id, { body }))
+  } else {
+    await ctx.reply("Send the text for your quick post, then add buttons or publish it.", { reply_markup: cancelKeyboard() })
+  }
+}
+
 async function startButtonBuilder(ctx: Context, repository: Repository): Promise<void> {
   const id = await ensureUser(ctx, repository)
   let draft = await repository.getDraft(id)
@@ -164,6 +180,30 @@ function isAdminMember(member: { status: string; can_post_messages?: boolean }):
   return member.status === "creator" || (member.status === "administrator" && member.can_post_messages !== false)
 }
 
+type PublishablePost = Pick<Draft, "content_type" | "body" | "caption" | "telegram_file_id" | "buttons">
+
+async function sendPost(telegram: TelegramService, chatId: number, post: PublishablePost): Promise<{ message_id: number }> {
+  const text = draftText(post)
+  const markup = postButtonsKeyboard(post.buttons)
+  if (post.content_type === "text") return telegram.sendMessage(chatId, text, { parse_mode: "HTML", reply_markup: markup })
+  if (post.content_type === "photo") {
+    return telegram.sendPhoto(chatId, post.telegram_file_id!, {
+      ...(text ? { caption: text, parse_mode: "HTML" } : {}),
+      reply_markup: markup,
+    })
+  }
+  return telegram.sendVideo(chatId, post.telegram_file_id!, {
+    ...(text ? { caption: text, parse_mode: "HTML" } : {}),
+    reply_markup: markup,
+  })
+}
+
+async function verifyTargetPermission(telegram: TelegramService, target: PublishTarget): Promise<boolean> {
+  const me = await telegram.getMe()
+  const member = await telegram.getChatMember(target.chat_id, me.id)
+  return isAdminMember(member as { status: string; can_post_messages?: boolean })
+}
+
 async function publishDraft(
   ctx: Context,
   repository: Repository,
@@ -183,9 +223,7 @@ async function publishDraft(
 
   if (target.stored) {
     try {
-      const me = await telegram.getMe()
-      const member = await telegram.getChatMember(target.chatId, me.id)
-      if (!isAdminMember(member as { status: string; can_post_messages?: boolean })) {
+      if (!(await verifyTargetPermission(telegram, target.stored))) {
         await ctx.reply("⚠️ I couldn't publish this because I don't have permission in that chat.", { reply_markup: previewKeyboard() })
         return
       }
@@ -203,22 +241,7 @@ async function publishDraft(
   }
 
   try {
-    const text = draftText(draft)
-    const markup = postButtonsKeyboard(draft.buttons)
-    let sent: { message_id: number }
-    if (draft.content_type === "text") {
-      sent = await telegram.sendMessage(target.chatId, text, { parse_mode: "HTML", reply_markup: markup })
-    } else if (draft.content_type === "photo") {
-      sent = await telegram.sendPhoto(target.chatId, draft.telegram_file_id!, {
-        ...(text ? { caption: text, parse_mode: "HTML" } : {}),
-        reply_markup: markup,
-      })
-    } else {
-      sent = await telegram.sendVideo(target.chatId, draft.telegram_file_id!, {
-        ...(text ? { caption: text, parse_mode: "HTML" } : {}),
-        reply_markup: markup,
-      })
-    }
+    const sent = await sendPost(telegram, target.chatId, draft)
     await repository.updatePublication(publication.id, { status: "published", telegram_message_id: sent.message_id })
     await repository.updatePostStatus(post.id, "published")
     await repository.deleteDraft(draft.id)
@@ -251,9 +274,7 @@ async function scheduleDraft(
   }
   if (target.stored) {
     try {
-      const me = await telegram.getMe()
-      const member = await telegram.getChatMember(target.chatId, me.id)
-      if (!isAdminMember(member as { status: string; can_post_messages?: boolean })) {
+      if (!(await verifyTargetPermission(telegram, target.stored))) {
         await ctx.reply("⚠️ I couldn't schedule this because I don't have permission in that chat.", { reply_markup: previewKeyboard() })
         return
       }
@@ -271,6 +292,53 @@ async function scheduleDraft(
   })
 }
 
+async function publishToAllTargets(ctx: Context, repository: Repository, telegram: TelegramService): Promise<void> {
+  const id = await ensureUser(ctx, repository)
+  const draft = await repository.getDraft(id)
+  if (!draft) {
+    await ctx.reply("There is no active draft. Use /create to begin.", { reply_markup: mainMenuKeyboard() })
+    return
+  }
+  if (draft.content_type === "text" ? !draft.body?.trim() : !draft.telegram_file_id) {
+    await ctx.reply("Your draft is missing content. Choose Edit Content to finish it.", { reply_markup: previewKeyboard() })
+    return
+  }
+  const targets = await repository.listTargets(id)
+  if (targets.length < 2) {
+    await ctx.reply("Register at least two publishing targets before using channel sync.", { reply_markup: previewKeyboard() })
+    return
+  }
+
+  const post = await repository.createPost(draft)
+  const published: string[] = []
+  const failed: string[] = []
+  for (const target of targets) {
+    const label = target.chat_title || target.chat_username || String(target.chat_id)
+    try {
+      if (!(await verifyTargetPermission(telegram, target))) {
+        failed.push(`${label} (permission)`)
+        continue
+      }
+      const publication = await repository.claimPublication(post.id, id, target.chat_id)
+      if (!publication) continue
+      const sent = await sendPost(telegram, target.chat_id, draft)
+      await repository.updatePublication(publication.id, { status: "published", telegram_message_id: sent.message_id })
+      published.push(label)
+    } catch (error) {
+      failed.push(label)
+      console.error("Channel sync publish failed", { target: target.chat_id, message: error instanceof Error ? error.message : "unknown error" })
+    }
+  }
+
+  if (published.length) await repository.updatePostStatus(post.id, "published")
+  else await repository.updatePostStatus(post.id, "failed")
+  if (!failed.length) await repository.deleteDraft(draft.id)
+  const details = [published.length ? `Published to: ${published.join(", ")}` : "No target was published.", failed.length ? `Needs attention: ${failed.join(", ")}` : ""]
+  await ctx.reply(`📡 Channel sync complete.\n\n${details.filter(Boolean).join("\n")}${failed.length ? "\n\nYour draft is still safe so you can retry the failed targets." : ""}`, {
+    reply_markup: failed.length ? previewKeyboard() : mainMenuKeyboard(),
+  })
+}
+
 async function showScheduled(ctx: Context, repository: Repository): Promise<void> {
   const posts = await repository.listScheduledPosts(userId(ctx))
   if (!posts.length) {
@@ -281,6 +349,26 @@ async function showScheduled(ctx: Context, repository: Repository): Promise<void
     posts.map((post, index) => `${index + 1}. ${new Date(post.scheduled_for).toISOString().replace("T", " ").slice(0, 16)} UTC · ${post.status}`).join("\n"),
     { reply_markup: scheduledPostsKeyboard(posts) },
   )
+}
+
+async function clonePost(ctx: Context, repository: Repository, postId: string): Promise<void> {
+  const id = await ensureUser(ctx, repository)
+  const active = await repository.getDraft(id)
+  if (active) {
+    await ctx.reply("Finish or cancel your active draft before cloning another post.", { reply_markup: draftConflictKeyboard() })
+    return
+  }
+  const post = await repository.getPostForUser(postId, id)
+  if (!post) throw new Error("That post is no longer available")
+  const draft = await repository.createDraft(id, post.content_type, "button_menu")
+  const cloned = await repository.updateDraft(draft.id, {
+    body: post.body,
+    caption: post.caption,
+    telegram_file_id: post.telegram_file_id,
+    buttons: post.buttons,
+    state: "button_menu",
+  })
+  await showButtonMenu(ctx, repository, cloned)
 }
 
 export function buildBot(repository: Repository, token: string): Bot<Context> {
@@ -305,6 +393,13 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
   bot.command("create", async (ctx) => {
     try {
       await startDraft(ctx, repository)
+    } catch (error) {
+      await replyError(ctx, error)
+    }
+  })
+  bot.command("quickpublish", async (ctx) => {
+    try {
+      await startQuickPublish(ctx, repository, typeof ctx.match === "string" ? ctx.match.trim() : "")
     } catch (error) {
       await replyError(ctx, error)
     }
@@ -342,7 +437,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         return
       }
       await ctx.reply(posts.map((post, index) => `${index + 1}. ${post.content_type} · ${post.status} · ${post.created_at.slice(0, 10)}`).join("\n"), {
-        reply_markup: mainMenuKeyboard(),
+        reply_markup: postsKeyboard(posts),
       })
     } catch (error) {
       await replyError(ctx, error)
@@ -423,6 +518,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       }
       if (data === "menu:create") return startDraft(ctx, repository)
       if (data === "menu:buttons") return startButtonBuilder(ctx, repository)
+      if (data === "menu:quickpublish") return startQuickPublish(ctx, repository)
       if (data === "menu:templates") return showTemplates(ctx, repository)
       if (data === "menu:home") return showMainMenu(ctx)
       if (data === "menu:help") return ctx.reply(HELP_TEXT, { reply_markup: mainMenuKeyboard() })
@@ -430,7 +526,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       if (data === "menu:posts") {
         const posts = await repository.listPosts(id)
         await ctx.reply(posts.length ? posts.map((post, index) => `${index + 1}. ${post.content_type} · ${post.status}`).join("\n") : "You have no published posts yet.", {
-          reply_markup: mainMenuKeyboard(),
+          reply_markup: posts.length ? postsKeyboard(posts) : mainMenuKeyboard(),
         })
         return
       }
@@ -558,6 +654,10 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         })
         return
       }
+      if (data === "publish:all") {
+        await publishToAllTargets(ctx, repository, telegram)
+        return
+      }
       if (data === "publish:self") {
         await publishDraft(ctx, repository, telegram, { chatId: ctx.chat!.id, label: "your private chat" })
         return
@@ -581,6 +681,10 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       if (data.startsWith("schedule:cancel:")) {
         const cancelled = await repository.cancelScheduledPost(data.slice("schedule:cancel:".length), id)
         await ctx.reply(cancelled ? "✅ Scheduled post cancelled." : "That scheduled post is no longer pending.", { reply_markup: mainMenuKeyboard() })
+        return
+      }
+      if (data.startsWith("post:clone:")) {
+        await clonePost(ctx, repository, data.slice("post:clone:".length))
         return
       }
       if (data.startsWith("template:preset:")) {

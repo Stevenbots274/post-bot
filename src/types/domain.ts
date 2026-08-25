@@ -68,6 +68,7 @@ export interface StoredPost {
   caption: string | null
   telegram_file_id: string | null
   buttons: ButtonDefinition[]
+  created_at: string
 }
 
 export interface ScheduledPost {

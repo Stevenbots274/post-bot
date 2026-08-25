@@ -164,6 +164,18 @@ export class Repository {
     return { ...data, buttons: Array.isArray(data.buttons) ? data.buttons : [] } as StoredPost
   }
 
+  async getPostForUser(postId: string, userId: number): Promise<StoredPost | null> {
+    const { data, error } = await this.db
+      .from("posts")
+      .select("*")
+      .eq("id", postId)
+      .eq("telegram_user_id", userId)
+      .maybeSingle()
+    if (error) throw new Error(`post lookup failed: ${error.message}`)
+    if (!data) return null
+    return { ...data, buttons: Array.isArray(data.buttons) ? data.buttons : [] } as StoredPost
+  }
+
   async updateScheduledPost(
     id: string,
     patch: { status: ScheduledPost["status"]; telegram_message_id?: number; error_message?: string },
@@ -318,7 +330,7 @@ export class Repository {
   }
 
   async deleteUserData(userId: number): Promise<void> {
-    for (const table of ["publications", "posts", "templates", "publish_targets", "buttons", "drafts"]) {
+    for (const table of ["publications", "scheduled_posts", "posts", "templates", "publish_targets", "buttons", "drafts"]) {
       const { error } = await this.db.from(table).delete().eq("telegram_user_id", userId)
       if (error) throw new Error(`data deletion failed: ${error.message}`)
     }

@@ -28,6 +28,8 @@ Add the bot as an administrator with permission to post. An administrator sends 
 
 From a preview, choose **Schedule**, select a registered target, and enter a future UTC time as `YYYY-MM-DD HH:MM`. A single scheduler worker runs inside the bot process and claims due rows atomically, so multiple deployed instances will not intentionally publish the same schedule twice. Use `/scheduled` to review or cancel pending schedules.
 
+From the publish screen, **Publish to All Targets** provides channel-sync behavior across every target explicitly registered by the user. Each target is permission-checked and independently idempotent.
+
 ## Operations
 
 - Keep structured logs limited to update type, Telegram IDs, operation, and Telegram error code.

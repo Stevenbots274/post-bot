@@ -30,6 +30,7 @@
 ## Editing
 [ ] Content can be edited before publish.
 [ ] Buttons can be edited before publish.
+[ ] Quick Publish can start a text post with inline text.
 [ ] Draft survives a temporary error.
 [ ] Cancel deletes/abandons the active draft safely.
 
@@ -39,6 +40,10 @@
 [ ] Post publishes once.
 [ ] Double-click does not duplicate publication.
 [ ] Telegram API failures are handled gracefully.
+[ ] A draft can publish to all registered targets without duplicating a target publication.
+[ ] A recent post can be cloned into a new editable draft.
+[ ] A post can be scheduled for a future UTC time.
+[ ] Scheduled posts can be cancelled before delivery.
 
 ## Persistence
 [ ] User is stored.

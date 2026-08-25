@@ -96,6 +96,7 @@ const server = createServer(async (request, response) => {
 await bot.api.setMyCommands([
   { command: "start", description: "Open the main menu" },
   { command: "create", description: "Create a new post" },
+  { command: "quickpublish", description: "Start a fast text post" },
   { command: "buttons", description: "Open the button builder" },
   { command: "templates", description: "Use a template" },
   { command: "posts", description: "View recent posts" },

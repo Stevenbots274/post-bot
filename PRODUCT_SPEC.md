@@ -12,6 +12,7 @@ Create clean Telegram posts with proper formatting and real clickable buttons wi
 /start
 /help
 /create
+/quickpublish
 /buttons
 /templates
 /settings
@@ -21,6 +22,8 @@ Optional later:
 /posts
 /schedule
 /broadcast
+
+V1 implementation also supports /scheduled, cloning recent posts, and publishing one draft to all explicitly registered targets.
 
 ## Main menu
 Use Telegram inline keyboard buttons:

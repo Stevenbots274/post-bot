@@ -1,12 +1,14 @@
 import { InlineKeyboard } from "grammy"
-import type { ButtonDefinition, PublishTarget, ScheduledPost, Template } from "../types/domain.js"
+import type { ButtonDefinition, PublishTarget, ScheduledPost, StoredPost, Template } from "../types/domain.js"
 
 export function mainMenuKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
     .text("➕ Create Post", "menu:create")
     .text("🔘 Button Builder", "menu:buttons")
     .row()
+    .text("⚡ Quick Publish", "menu:quickpublish")
     .text("🧩 Templates", "menu:templates")
+    .row()
     .text("📚 My Posts", "menu:posts")
     .row()
     .text("📅 Scheduled", "menu:scheduled")
@@ -94,11 +96,21 @@ export function publishTargetsKeyboard(targets: PublishTarget[], action: "publis
   const selfAction = action === "schedule" ? "schedule:self" : "publish:self"
   const targetAction = action === "schedule" ? "schedule:target:" : "publish:target:"
   const keyboard = new InlineKeyboard().text(action === "schedule" ? "📨 Schedule for me" : "📨 Send to me", selfAction).row()
+  if (action === "publish" && targets.length > 1) keyboard.text("📡 Publish to All Targets", "publish:all").row()
   for (const target of targets) {
     const name = target.chat_title || (target.chat_username ? `@${target.chat_username}` : String(target.chat_id))
     keyboard.text(`📣 ${name.slice(0, 40)}`, `${targetAction}${target.id}`).row()
   }
   keyboard.text("❌ Cancel", "flow:cancel")
+  return keyboard
+}
+
+export function postsKeyboard(posts: Array<Pick<StoredPost, "id" | "content_type" | "created_at">>): InlineKeyboard {
+  const keyboard = new InlineKeyboard()
+  posts.forEach((post, index) => {
+    keyboard.text(`📋 Clone ${index + 1} · ${post.content_type}`, `post:clone:${post.id}`).row()
+  })
+  keyboard.text("⬅️ Main Menu", "menu:home")
   return keyboard
 }
 

@@ -29,6 +29,8 @@ IMPORTANT:
 17. Add friendly error handling.
 18. Test every acceptance test.
 
+The implementation may additionally support persisted scheduled publishing, cloning recent posts, and publishing to all explicitly registered targets. Keep these actions authorization-checked and idempotent.
+
 ## Critical Telegram requirement
 Do NOT fake clickable links using plain Markdown text.
 

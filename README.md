@@ -13,6 +13,8 @@ Core flow: **Create -> Format -> Buttons -> Preview -> Publish**
 - Preview, content editing, button editing/deletion, clear, and cancel.
 - Built-in templates plus personal saved templates.
 - Persisted scheduled publishing with UTC time input and cancellation.
+- Channel-sync publishing to every registered target with per-target permission checks.
+- Clone any recent post into a new editable draft.
 - Private-chat publishing and explicitly registered group/channel targets.
 - Bot permission checks before target publishing.
 - Supabase persistence for users, drafts, templates, targets, posts, publications, and processed updates.
@@ -56,9 +58,11 @@ See [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) for webhook, migration, logging
 
 ## Bot commands
 
-`/start`, `/create`, `/buttons`, `/templates`, `/posts`, `/scheduled`, `/settings`, `/help`, `/cancel`, and `/register`.
+`/start`, `/create`, `/quickpublish`, `/buttons`, `/templates`, `/posts`, `/scheduled`, `/settings`, `/help`, `/cancel`, and `/register`.
 
-Every flow includes a Cancel action. Invalid URLs and phone numbers are rejected without losing the draft.
+Every flow includes a Cancel action. Invalid URLs are rejected without losing the draft.
+
+Use **Publish to All Targets** from the publish screen for channel-sync behavior. Use **Clone** from `/posts` to reuse a prior post without changing the original.
 
 ## Security notes
 
