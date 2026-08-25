@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises"
+import { join } from "node:path"
 import { Pool } from "pg"
 import type {
   ButtonDefinition,
@@ -76,12 +78,20 @@ function isUniqueError(error: unknown): boolean {
 
 export class NeonRepository implements Repository {
   private readonly pool: Pool
+  private readonly ready: Promise<void>
 
   constructor(databaseUrl: string) {
     this.pool = new Pool({ connectionString: databaseUrl })
+    this.ready = this.applySchema()
+  }
+
+  private async applySchema(): Promise<void> {
+    const schema = await readFile(join(process.cwd(), "DATABASE.sql"), "utf8")
+    await this.pool.query(schema)
   }
 
   private async query(text: string, values: unknown[] = []): Promise<Row[]> {
+    await this.ready
     const result = await this.pool.query(text, values)
     return result.rows as Row[]
   }
@@ -309,6 +319,7 @@ export class NeonRepository implements Repository {
   }
 
   async close(): Promise<void> {
+    await this.ready
     await this.pool.end()
   }
 }

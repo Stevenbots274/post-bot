@@ -5,7 +5,7 @@
 Choose the backend with `DB_PROVIDER`:
 
 - `supabase`: run `DATABASE.sql` in the Supabase SQL editor and set `SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY`.
-- `neon`: run the same PostgreSQL-compatible `DATABASE.sql` in the Neon SQL editor or with `psql`, then set `DATABASE_URL`.
+- `neon`: set `DATABASE_URL`. The Neon adapter automatically applies the checked-in `DATABASE.sql` before serving requests.
 - `mongodb`: set `MONGODB_URI` and optionally `MONGODB_DATABASE` (default `post_bot`). The MongoDB adapter creates the collections and required indexes on startup.
 
 The bot uses the same repository API for all three providers. The Supabase service-role key and all database connection strings are used only by the trusted backend. Do not put them in a browser bundle.
@@ -62,7 +62,7 @@ Deploy one running instance for the first launch. The scheduler claims rows atom
 
 Changing `DB_PROVIDER` changes the backend used by the bot; it does not copy existing records automatically. Before switching, back up the current database, initialize the target provider, migrate the data, update the target environment variables, and redeploy. Keep the same Telegram bot token and `APP_URL`.
 
-Supabase and Neon both use PostgreSQL, so a PostgreSQL dump/restore is the simplest path between them. MongoDB uses document collections and must be migrated with a mapping tool or an application-specific export/import process. The adapter preserves the logical entities used by the bot: users, drafts, templates, publishing targets, posts, scheduled posts, publications, and processed updates.
+Supabase and Neon both use PostgreSQL, so a PostgreSQL dump/restore is the simplest path between them. The Neon adapter applies the checked-in schema on startup, but changing providers still does not copy existing records. MongoDB uses document collections and must be migrated with a mapping tool or an application-specific export/import process. The adapter preserves the logical entities used by the bot: users, drafts, templates, publishing targets, posts, scheduled posts, publications, and processed updates.
 
 After switching, run `npm run set-webhook` only if `APP_URL` or `WEBHOOK_PATH` changed. Telegram stores the webhook independently of the database provider.
 

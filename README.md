@@ -38,9 +38,9 @@ npm install
 cp .env.example .env
 ```
 
-Fill in `.env` with the Telegram and selected database provider values. Apply [`DATABASE.sql`](./DATABASE.sql) in Supabase or Neon; MongoDB initializes its collections and indexes on startup.
+Fill in `.env` with the Telegram and selected database provider values. Apply [`DATABASE.sql`](./DATABASE.sql) in Supabase; Neon applies it automatically on startup, and MongoDB initializes its collections and indexes automatically.
 
-For Supabase or Neon upgrades, run the SQL file again so the `users.settings` column is added for Auto Buttons.
+For Supabase upgrades, run the SQL file again so the `users.settings` column is added for Auto Buttons. Neon applies the file on startup.
 
 ## Development
 
