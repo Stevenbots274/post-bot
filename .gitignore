@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+coverage/
+.DS_Store
+uploads/
+outputs/
+.bcode/
+AGENTS.md
+.promote-manifest.json
+.restore-marker
+.uploads-manifest.json
