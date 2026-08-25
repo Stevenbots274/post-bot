@@ -60,7 +60,7 @@ The HTTP server exposes `GET /health` and the protected `POST /telegram/webhook`
 4. Run `npm run set-webhook` once after deployment.
 5. Add the bot to a group or channel as an administrator, then send `/register` there. Only registered targets appear during publishing.
 
-See [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) for Supabase, webhook, logging, and provider-specific launch guidance for Railway, Koyeb, Render, and Fly.io.
+See [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) for Supabase, mobile migration, webhook, logging, and provider-specific launch guidance for Railway, Koyeb, Render, and Fly.io.
 
 ## Bot commands
 

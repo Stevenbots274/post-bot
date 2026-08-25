@@ -66,6 +66,17 @@ Supabase and Neon both use PostgreSQL, so a PostgreSQL dump/restore is the simpl
 
 After switching, run `npm run set-webhook` only if `APP_URL` or `WEBHOOK_PATH` changed. Telegram stores the webhook independently of the database provider.
 
+## Mobile Migration Workflow
+
+If you are deploying from a phone, use the included GitHub Actions workflow instead of putting a database password in chat or Git history:
+
+1. In the GitHub repository, open **Settings -> Secrets and variables -> Actions**.
+2. Create a repository secret named `SUPABASE_DB_URL` containing the rotated Supabase PostgreSQL connection string.
+3. Open **Actions -> Apply Supabase schema -> Run workflow** and select the `main` branch.
+4. Wait for the job to finish. It runs `DATABASE.sql` with `ON_ERROR_STOP=1`, so a failed statement fails the workflow instead of appearing successful.
+
+The workflow is manual only and does not run on every push. It uses a masked GitHub secret and needs no Supabase management token.
+
 ## Railway
 
 1. Open [railway.com](https://railway.com), create a project, and choose **Deploy from GitHub repo**.

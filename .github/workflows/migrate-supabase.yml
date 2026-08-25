@@ -1,0 +1,21 @@
+name: Apply Supabase schema
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out schema
+        uses: actions/checkout@v4
+
+      - name: Apply DATABASE.sql
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          test -n "$SUPABASE_DB_URL"
+          psql "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 --file DATABASE.sql
