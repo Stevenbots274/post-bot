@@ -9,7 +9,7 @@ Explain:
 - adding buttons
 - previews
 - publishing
-- WhatsApp button generation
+- HTTPS URL button generation
 - supported formatting
 
 ## /create

@@ -8,10 +8,11 @@ Core flow: **Create -> Format -> Buttons -> Preview -> Publish**
 
 - Text, photo, and video drafts using Telegram `file_id` values.
 - One canonical safe formatter for bold, italic, strikethrough, inline code, and HTTPS links.
-- Web and WhatsApp buttons rendered as Telegram `InlineKeyboardMarkup`, never fake Markdown links.
+- HTTPS URL buttons rendered as Telegram `InlineKeyboardMarkup`, never fake Markdown links.
 - Two buttons per row and up to eight buttons per post.
 - Preview, content editing, button editing/deletion, clear, and cancel.
 - Built-in templates plus personal saved templates.
+- Persisted scheduled publishing with UTC time input and cancellation.
 - Private-chat publishing and explicitly registered group/channel targets.
 - Bot permission checks before target publishing.
 - Supabase persistence for users, drafts, templates, targets, posts, publications, and processed updates.
@@ -55,7 +56,7 @@ See [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) for webhook, migration, logging
 
 ## Bot commands
 
-`/start`, `/create`, `/buttons`, `/templates`, `/posts`, `/settings`, `/help`, `/cancel`, and `/register`.
+`/start`, `/create`, `/buttons`, `/templates`, `/posts`, `/scheduled`, `/settings`, `/help`, `/cancel`, and `/register`.
 
 Every flow includes a Cancel action. Invalid URLs and phone numbers are rejected without losing the draft.
 

@@ -85,6 +85,26 @@ create table if not exists public.posts (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.scheduled_posts (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  telegram_user_id bigint not null references public.users(telegram_user_id) on delete cascade,
+  chat_id bigint not null,
+  scheduled_for timestamptz not null,
+  status text not null default 'pending',
+  telegram_message_id bigint,
+  error_message text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists scheduled_posts_due_idx
+  on public.scheduled_posts(scheduled_for)
+  where status = 'pending';
+
+create unique index if not exists scheduled_posts_active_post_target_idx
+  on public.scheduled_posts(post_id, chat_id)
+  where status in ('pending', 'processing', 'published');
+
 create table if not exists public.publications (
   id uuid primary key default gen_random_uuid(),
   post_id uuid not null references public.posts(id) on delete cascade,

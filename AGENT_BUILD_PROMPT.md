@@ -17,7 +17,7 @@ IMPORTANT:
 5. Support text, photo, and video posts.
 6. Support safe Telegram formatting.
 7. Implement real Telegram inline URL buttons.
-8. Implement WhatsApp button generation with optional prefilled messages.
+8. Implement HTTPS URL button generation with safe validation.
 9. Implement button rows and editing.
 10. Implement preview.
 11. Implement publishing to authorized Telegram chats/channels.
@@ -34,13 +34,7 @@ Do NOT fake clickable links using plain Markdown text.
 
 Use Telegram's actual InlineKeyboardMarkup with URL buttons.
 
-For a WhatsApp button:
-visible text should be something like:
-💬 Order on WhatsApp
-
-The underlying URL may be:
-https://wa.me/234xxxxxxxxxx?text=...
-
+Visible button text must be separate from the underlying HTTPS URL.
 The URL itself must not appear in the visible button label.
 
 ## Architecture requirement

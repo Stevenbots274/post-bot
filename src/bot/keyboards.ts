@@ -1,5 +1,5 @@
 import { InlineKeyboard } from "grammy"
-import type { ButtonDefinition, PublishTarget, Template } from "../types/domain.js"
+import type { ButtonDefinition, PublishTarget, ScheduledPost, Template } from "../types/domain.js"
 
 export function mainMenuKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
@@ -9,7 +9,9 @@ export function mainMenuKeyboard(): InlineKeyboard {
     .text("🧩 Templates", "menu:templates")
     .text("📚 My Posts", "menu:posts")
     .row()
+    .text("📅 Scheduled", "menu:scheduled")
     .text("⚙️ Settings", "menu:settings")
+    .row()
     .text("❓ Help", "menu:help")
 }
 
@@ -50,8 +52,7 @@ export function buttonMenuKeyboard(buttons: ButtonDefinition[]): InlineKeyboard 
       .row()
   })
   keyboard
-    .text("➕ Web Button", "button:add:web")
-    .text("💬 WhatsApp", "button:add:whatsapp")
+    .text("🔗 URL Button", "button:add:url")
     .row()
     .text("🧹 Clear Buttons", "button:clear")
     .text("✅ Done", "button:done")
@@ -82,19 +83,32 @@ export function previewKeyboard(): InlineKeyboard {
     .text("🧩 Add Template", "preview:template")
     .text("💾 Save Template", "template:save")
     .row()
+    .text("⏰ Schedule", "preview:schedule")
     .text("👀 Refresh Preview", "preview:refresh")
     .text("📤 Publish", "preview:publish")
     .row()
     .text("❌ Cancel", "flow:cancel")
 }
 
-export function publishTargetsKeyboard(targets: PublishTarget[]): InlineKeyboard {
-  const keyboard = new InlineKeyboard().text("📨 Send to me", "publish:self").row()
+export function publishTargetsKeyboard(targets: PublishTarget[], action: "publish" | "schedule" = "publish"): InlineKeyboard {
+  const selfAction = action === "schedule" ? "schedule:self" : "publish:self"
+  const targetAction = action === "schedule" ? "schedule:target:" : "publish:target:"
+  const keyboard = new InlineKeyboard().text(action === "schedule" ? "📨 Schedule for me" : "📨 Send to me", selfAction).row()
   for (const target of targets) {
     const name = target.chat_title || (target.chat_username ? `@${target.chat_username}` : String(target.chat_id))
-    keyboard.text(`📣 ${name.slice(0, 40)}`, `publish:target:${target.id}`).row()
+    keyboard.text(`📣 ${name.slice(0, 40)}`, `${targetAction}${target.id}`).row()
   }
   keyboard.text("❌ Cancel", "flow:cancel")
+  return keyboard
+}
+
+export function scheduledPostsKeyboard(posts: ScheduledPost[]): InlineKeyboard {
+  const keyboard = new InlineKeyboard()
+  for (const post of posts) {
+    const time = new Date(post.scheduled_for).toISOString().replace("T", " ").slice(0, 16)
+    keyboard.text(`🗑️ Cancel ${time} UTC`, `schedule:cancel:${post.id}`).row()
+  }
+  keyboard.text("⬅️ Main Menu", "menu:home")
   return keyboard
 }
 

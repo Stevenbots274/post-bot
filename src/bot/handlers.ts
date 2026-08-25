@@ -3,7 +3,8 @@ import type { Message } from "grammy/types"
 import type { Repository } from "../db/repository.js"
 import type { ButtonDefinition, ContentType, Draft, PublishTarget } from "../types/domain.js"
 import { draftText } from "../services/formatter.js"
-import { createWhatsAppUrl, normalizePhone, validateButtonLabel, validateHttpsUrl } from "../services/validation.js"
+import { validateButtonLabel, validateHttpsUrl } from "../services/validation.js"
+import { parseScheduleTime } from "../services/schedule.js"
 import { TelegramService } from "../services/telegram.js"
 import {
   buttonMenuKeyboard,
@@ -15,6 +16,7 @@ import {
   previewKeyboard,
   publishTargetsKeyboard,
   settingsKeyboard,
+  scheduledPostsKeyboard,
   skipKeyboard,
   templatesKeyboard,
 } from "./keyboards.js"
@@ -23,7 +25,7 @@ const HELP_TEXT = `POST BOT helps you create polished Telegram posts.
 
 1. Choose Text, Photo, or Video.
 2. Add your body or caption.
-3. Add real clickable URL or WhatsApp buttons.
+3. Add real clickable URL buttons.
 4. Preview, edit, and publish.
 
 Formatting supported: **bold**, __italic__, ~~strikethrough~~, \`inline code\`, and [links](https://example.com).
@@ -234,6 +236,53 @@ async function publishDraft(
   }
 }
 
+async function scheduleDraft(
+  ctx: Context,
+  repository: Repository,
+  telegram: TelegramService,
+  target: { chatId: number; label: string; stored?: PublishTarget },
+): Promise<void> {
+  const id = await ensureUser(ctx, repository)
+  const draft = await repository.getDraft(id)
+  if (!draft) throw new Error("Draft not found")
+  if (draft.content_type === "text" ? !draft.body?.trim() : !draft.telegram_file_id) {
+    await ctx.reply("Your draft is missing content. Choose Edit Content to finish it.", { reply_markup: previewKeyboard() })
+    return
+  }
+  if (target.stored) {
+    try {
+      const me = await telegram.getMe()
+      const member = await telegram.getChatMember(target.chatId, me.id)
+      if (!isAdminMember(member as { status: string; can_post_messages?: boolean })) {
+        await ctx.reply("⚠️ I couldn't schedule this because I don't have permission in that chat.", { reply_markup: previewKeyboard() })
+        return
+      }
+    } catch {
+      await ctx.reply("⚠️ I couldn't verify my permission in that chat. Your draft is still safe.", { reply_markup: previewKeyboard() })
+      return
+    }
+  }
+  await repository.updateDraft(draft.id, {
+    state: "waiting_schedule_time",
+    metadata: { ...draft.metadata, scheduleChatId: target.chatId, scheduleLabel: target.label },
+  })
+  await ctx.reply(`Send the UTC time for ${target.label} in YYYY-MM-DD HH:MM format.\nExample: 2026-09-01 18:30`, {
+    reply_markup: cancelKeyboard(),
+  })
+}
+
+async function showScheduled(ctx: Context, repository: Repository): Promise<void> {
+  const posts = await repository.listScheduledPosts(userId(ctx))
+  if (!posts.length) {
+    await ctx.reply("You have no scheduled posts.", { reply_markup: mainMenuKeyboard() })
+    return
+  }
+  await ctx.reply(
+    posts.map((post, index) => `${index + 1}. ${new Date(post.scheduled_for).toISOString().replace("T", " ").slice(0, 16)} UTC · ${post.status}`).join("\n"),
+    { reply_markup: scheduledPostsKeyboard(posts) },
+  )
+}
+
 export function buildBot(repository: Repository, token: string): Bot<Context> {
   const bot = new Bot<Context>(token)
   const telegram = new TelegramService(bot.api)
@@ -295,6 +344,14 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       await ctx.reply(posts.map((post, index) => `${index + 1}. ${post.content_type} · ${post.status} · ${post.created_at.slice(0, 10)}`).join("\n"), {
         reply_markup: mainMenuKeyboard(),
       })
+    } catch (error) {
+      await replyError(ctx, error)
+    }
+  })
+  bot.command("scheduled", async (ctx) => {
+    try {
+      await ensureUser(ctx, repository)
+      await showScheduled(ctx, repository)
     } catch (error) {
       await replyError(ctx, error)
     }
@@ -367,6 +424,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
       if (data === "menu:create") return startDraft(ctx, repository)
       if (data === "menu:buttons") return startButtonBuilder(ctx, repository)
       if (data === "menu:templates") return showTemplates(ctx, repository)
+      if (data === "menu:home") return showMainMenu(ctx)
       if (data === "menu:help") return ctx.reply(HELP_TEXT, { reply_markup: mainMenuKeyboard() })
       if (data === "menu:settings") return ctx.reply("Settings\n\nDelete your active draft whenever you need.", { reply_markup: settingsKeyboard() })
       if (data === "menu:posts") {
@@ -376,6 +434,7 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         })
         return
       }
+      if (data === "menu:scheduled") return showScheduled(ctx, repository)
       if (data.startsWith("content:")) {
         const contentType = data.slice("content:".length) as ContentType
         if (!["text", "photo", "video"].includes(contentType)) throw new Error("Invalid content type")
@@ -396,20 +455,15 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         )
         return
       }
-      if (data === "button:add:web" || data === "button:add:whatsapp") {
+      if (data === "button:add:url") {
         const draft = await repository.getDraft(id)
         if (!draft) throw new Error("Draft not found")
         if (draft.buttons.length >= 8) {
           await ctx.reply("A post can have up to 8 buttons in V1.", { reply_markup: buttonMenuKeyboard(draft.buttons) })
           return
         }
-        if (data.endsWith("web")) {
-          await repository.updateDraft(draft.id, { state: "waiting_button_label", metadata: metadataWithout(draft, "pendingPhone", "pendingButtonLabel") })
-          await ctx.reply("Send the visible label for the button, for example: Visit website", { reply_markup: cancelKeyboard() })
-        } else {
-          await repository.updateDraft(draft.id, { state: "waiting_wa_phone", metadata: metadataWithout(draft, "pendingPhone", "pendingButtonLabel") })
-          await ctx.reply("Send the international WhatsApp number, for example +2348012345678.", { reply_markup: cancelKeyboard() })
-        }
+        await repository.updateDraft(draft.id, { state: "waiting_button_label", metadata: metadataWithout(draft, "pendingButtonLabel") })
+        await ctx.reply("Send the visible label for the button, for example: Visit website", { reply_markup: cancelKeyboard() })
         return
       }
       if (data === "button:clear") {
@@ -468,15 +522,6 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         await ctx.reply("Send the new visible label for this button.", { reply_markup: cancelKeyboard() })
         return
       }
-      if (data === "wa:skip") {
-        const draft = await repository.getDraft(id)
-        if (!draft) throw new Error("Draft not found")
-        const phone = typeof draft.metadata.pendingPhone === "string" ? draft.metadata.pendingPhone : ""
-        if (!phone) throw new Error("WhatsApp number is missing")
-        const buttons = addButton(draft.buttons, { label: "💬 Order on WhatsApp", url: createWhatsAppUrl(phone), type: "whatsapp" })
-        await showButtonMenu(ctx, repository, await repository.updateDraft(draft.id, { buttons, metadata: metadataWithout(draft, "pendingPhone") }))
-        return
-      }
       if (data === "preview:edit_content") {
         const draft = await repository.getDraft(id)
         if (draft) await editContentPrompt(ctx, repository, draft)
@@ -493,6 +538,16 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         return
       }
       if (data === "preview:template") return showTemplates(ctx, repository)
+      if (data === "preview:schedule") {
+        const targets = await repository.listTargets(id)
+        const draft = await repository.getDraft(id)
+        if (!draft) throw new Error("Draft not found")
+        await repository.updateDraft(draft.id, { state: "publish_target" })
+        await ctx.reply("Choose where to schedule this post. The bot will verify its permission first.", {
+          reply_markup: publishTargetsKeyboard(targets, "schedule"),
+        })
+        return
+      }
       if (data === "preview:publish") {
         const targets = await repository.listTargets(id)
         const draft = await repository.getDraft(id)
@@ -511,6 +566,21 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         const target = await repository.getTarget(data.slice("publish:target:".length), id)
         if (!target) throw new Error("That publishing target is not available")
         await publishDraft(ctx, repository, telegram, { chatId: target.chat_id, label: target.chat_title || String(target.chat_id), stored: target })
+        return
+      }
+      if (data === "schedule:self") {
+        await scheduleDraft(ctx, repository, telegram, { chatId: ctx.chat!.id, label: "your private chat" })
+        return
+      }
+      if (data.startsWith("schedule:target:")) {
+        const target = await repository.getTarget(data.slice("schedule:target:".length), id)
+        if (!target) throw new Error("That scheduling target is not available")
+        await scheduleDraft(ctx, repository, telegram, { chatId: target.chat_id, label: target.chat_title || String(target.chat_id), stored: target })
+        return
+      }
+      if (data.startsWith("schedule:cancel:")) {
+        const cancelled = await repository.cancelScheduledPost(data.slice("schedule:cancel:".length), id)
+        await ctx.reply(cancelled ? "✅ Scheduled post cancelled." : "That scheduled post is no longer pending.", { reply_markup: mainMenuKeyboard() })
         return
       }
       if (data.startsWith("template:preset:")) {
@@ -607,18 +677,17 @@ export function buildBot(repository: Repository, token: string): Bot<Context> {
         const label = typeof draft.metadata.pendingButtonLabel === "string" ? draft.metadata.pendingButtonLabel : "Open link"
         const index = typeof draft.metadata.editingButtonIndex === "number" ? draft.metadata.editingButtonIndex : undefined
         const buttons = index === undefined
-          ? addButton(draft.buttons, { label, url, type: "web" })
-          : draft.buttons.map((button, current) => current === index ? { ...button, label, url, type: "web" as const } : button)
+          ? addButton(draft.buttons, { label, url, type: "url" })
+          : draft.buttons.map((button, current) => current === index ? { ...button, label, url, type: "url" as const } : button)
         await showButtonMenu(ctx, repository, await repository.updateDraft(draft.id, { buttons, metadata: metadataWithout(draft, "pendingButtonLabel", "editingButtonIndex"), state: "button_menu" }))
-      } else if (draft.state === "waiting_wa_phone") {
-        const phone = normalizePhone(text)
-        await repository.updateDraft(draft.id, { state: "waiting_wa_message", metadata: { ...draft.metadata, pendingPhone: phone } })
-        await ctx.reply("Optional: send the message to prefill in WhatsApp, or skip it.", { reply_markup: skipKeyboard("wa:skip") })
-      } else if (draft.state === "waiting_wa_message") {
-        const phone = typeof draft.metadata.pendingPhone === "string" ? draft.metadata.pendingPhone : ""
-        if (!phone) throw new Error("WhatsApp number is missing")
-        const buttons = addButton(draft.buttons, { label: "💬 Order on WhatsApp", url: createWhatsAppUrl(phone, text), type: "whatsapp" })
-        await showButtonMenu(ctx, repository, await repository.updateDraft(draft.id, { buttons, metadata: metadataWithout(draft, "pendingPhone"), state: "button_menu" }))
+      } else if (draft.state === "waiting_schedule_time") {
+        const chatId = typeof draft.metadata.scheduleChatId === "number" ? draft.metadata.scheduleChatId : 0
+        const label = typeof draft.metadata.scheduleLabel === "string" ? draft.metadata.scheduleLabel : "the selected chat"
+        if (!chatId) throw new Error("Scheduling target is missing")
+        const scheduledFor = parseScheduleTime(text)
+        await repository.schedulePost(draft, chatId, scheduledFor)
+        await repository.deleteDraft(draft.id)
+        await ctx.reply(`✅ Scheduled for ${scheduledFor.replace("T", " ").slice(0, 16)} UTC in ${label}.`, { reply_markup: mainMenuKeyboard() })
       } else if (draft.state === "waiting_template_name") {
         const name = text.slice(0, 80)
         if (!name) throw new Error("Please send a template name.")

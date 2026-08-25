@@ -13,6 +13,7 @@ export type DraftState =
   | "preview"
   | "publish_target"
   | "publishing"
+  | "waiting_schedule_time"
   | "waiting_template_name"
 
 export interface ButtonDefinition {
@@ -20,7 +21,7 @@ export interface ButtonDefinition {
   url: string
   row: number
   position: number
-  type?: "web" | "whatsapp"
+  type?: "url"
 }
 
 export interface Draft {
@@ -57,6 +58,26 @@ export interface Template {
   caption: string | null
   buttons: ButtonDefinition[]
   is_public: boolean
+}
+
+export interface StoredPost {
+  id: string
+  telegram_user_id: number
+  content_type: ContentType
+  body: string | null
+  caption: string | null
+  telegram_file_id: string | null
+  buttons: ButtonDefinition[]
+}
+
+export interface ScheduledPost {
+  id: string
+  post_id: string
+  telegram_user_id: number
+  chat_id: number
+  scheduled_for: string
+  status: "pending" | "processing" | "published" | "failed" | "cancelled"
+  telegram_message_id?: number | null
 }
 
 export interface TelegramUser {

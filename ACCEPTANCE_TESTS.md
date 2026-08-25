@@ -27,12 +27,6 @@
 [ ] Invalid URLs are rejected.
 [ ] Dangerous URL schemes are rejected.
 
-## WhatsApp
-[ ] International number is normalized.
-[ ] Prefilled message is encoded.
-[ ] WhatsApp opens with the message prefilled.
-[ ] Phone number is hidden behind the Telegram button label.
-
 ## Editing
 [ ] Content can be edited before publish.
 [ ] Buttons can be edited before publish.

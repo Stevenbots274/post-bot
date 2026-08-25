@@ -24,6 +24,10 @@ Use any Node 20 host that supports a long-running HTTP process. Configure the st
 
 Add the bot as an administrator with permission to post. An administrator sends `/register` inside the group or channel. The target is stored for that Telegram user and is checked again immediately before publishing.
 
+## Scheduled publishing
+
+From a preview, choose **Schedule**, select a registered target, and enter a future UTC time as `YYYY-MM-DD HH:MM`. A single scheduler worker runs inside the bot process and claims due rows atomically, so multiple deployed instances will not intentionally publish the same schedule twice. Use `/scheduled` to review or cancel pending schedules.
+
 ## Operations
 
 - Keep structured logs limited to update type, Telegram IDs, operation, and Telegram error code.

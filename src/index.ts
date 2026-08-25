@@ -4,9 +4,12 @@ import { env } from "./config/env.js"
 import { Repository } from "./db/repository.js"
 import { buildBot } from "./bot/handlers.js"
 import { RateLimiter } from "./services/rate-limit.js"
+import { TelegramService } from "./services/telegram.js"
+import { Scheduler } from "./services/scheduler.js"
 
 const repository = new Repository(env.supabaseUrl, env.supabaseServiceRoleKey)
 const bot = buildBot(repository, env.telegramBotToken)
+const scheduler = new Scheduler(repository, new TelegramService(bot.api))
 const ipLimiter = new RateLimiter(120, 60_000)
 const userLimiter = new RateLimiter(60, 60_000)
 
@@ -96,10 +99,13 @@ await bot.api.setMyCommands([
   { command: "buttons", description: "Open the button builder" },
   { command: "templates", description: "Use a template" },
   { command: "posts", description: "View recent posts" },
+  { command: "scheduled", description: "Manage scheduled posts" },
   { command: "settings", description: "Manage your data" },
   { command: "help", description: "Show help" },
   { command: "cancel", description: "Cancel the current flow" },
 ])
+
+scheduler.start()
 
 server.listen(env.appPort, () => {
   console.log(`POST BOT listening on port ${env.appPort}`)
@@ -107,6 +113,7 @@ server.listen(env.appPort, () => {
 
 function close(signal: string): void {
   console.log(`Received ${signal}; shutting down`)
+  scheduler.stop()
   server.close(() => process.exit(0))
 }
 

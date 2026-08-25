@@ -6,7 +6,7 @@
 - Validate all callback data and never trust user-supplied IDs blindly.
 - Escape/sanitize formatted content.
 - Validate URLs and reject dangerous schemes.
-- Encode WhatsApp messages with encodeURIComponent.
+- Keep scheduled content and target identifiers server-side.
 - Rate-limit users.
 - Prevent duplicate update processing.
 - Prevent duplicate publishing.

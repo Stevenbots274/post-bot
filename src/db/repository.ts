@@ -5,6 +5,8 @@ import type {
   Draft,
   DraftState,
   PublishTarget,
+  ScheduledPost,
+  StoredPost,
   TelegramUser,
   Template,
 } from "../types/domain.js"
@@ -88,7 +90,7 @@ export class Repository {
     if (error) throw new Error(`draft deletion failed: ${error.message}`)
   }
 
-  async createPost(draft: Draft): Promise<{ id: string }> {
+  async createPost(draft: Draft, status = "publishing"): Promise<{ id: string }> {
     const { data, error } = await this.db
       .from("posts")
       .insert({
@@ -100,13 +102,98 @@ export class Repository {
         caption: draft.caption,
         telegram_file_id: draft.telegram_file_id,
         buttons: draft.buttons,
-        status: "publishing",
+        status,
       })
       .select("id")
       .single()
     if (error?.code === "23505") return { id: draft.id }
     if (error || !data) throw new Error(`post creation failed: ${error?.message ?? "empty response"}`)
     return data as { id: string }
+  }
+
+  async schedulePost(draft: Draft, chatId: number, scheduledFor: string): Promise<{ id: string }> {
+    const post = await this.createPost(draft, "scheduled")
+    const { data, error } = await this.db
+      .from("scheduled_posts")
+      .insert({ post_id: post.id, telegram_user_id: draft.telegram_user_id, chat_id: chatId, scheduled_for: scheduledFor, status: "pending" })
+      .select("id")
+      .single()
+    if (error?.code === "23505") {
+      const { data: existing, error: lookupError } = await this.db
+        .from("scheduled_posts")
+        .select("id")
+        .eq("post_id", post.id)
+        .eq("chat_id", chatId)
+        .eq("status", "pending")
+        .single()
+      if (lookupError || !existing) throw new Error(`schedule lookup failed: ${lookupError?.message ?? "empty response"}`)
+      return existing as { id: string }
+    }
+    if (error || !data) throw new Error(`schedule creation failed: ${error?.message ?? "empty response"}`)
+    return data as { id: string }
+  }
+
+  async listDueSchedules(now = new Date().toISOString()): Promise<ScheduledPost[]> {
+    const { data, error } = await this.db
+      .from("scheduled_posts")
+      .select("*")
+      .eq("status", "pending")
+      .lte("scheduled_for", now)
+      .order("scheduled_for", { ascending: true })
+      .limit(20)
+    if (error) throw new Error(`schedule lookup failed: ${error.message}`)
+    return (data ?? []) as ScheduledPost[]
+  }
+
+  async claimSchedule(id: string): Promise<ScheduledPost | null> {
+    const { data, error } = await this.db
+      .from("scheduled_posts")
+      .update({ status: "processing" })
+      .eq("id", id)
+      .eq("status", "pending")
+      .select("*")
+      .maybeSingle()
+    if (error) throw new Error(`schedule claim failed: ${error.message}`)
+    return (data as ScheduledPost | null) ?? null
+  }
+
+  async getPost(postId: string): Promise<StoredPost | null> {
+    const { data, error } = await this.db.from("posts").select("*").eq("id", postId).maybeSingle()
+    if (error) throw new Error(`post lookup failed: ${error.message}`)
+    if (!data) return null
+    return { ...data, buttons: Array.isArray(data.buttons) ? data.buttons : [] } as StoredPost
+  }
+
+  async updateScheduledPost(
+    id: string,
+    patch: { status: ScheduledPost["status"]; telegram_message_id?: number; error_message?: string },
+  ): Promise<void> {
+    const { error } = await this.db.from("scheduled_posts").update(patch).eq("id", id)
+    if (error) throw new Error(`schedule update failed: ${error.message}`)
+  }
+
+  async listScheduledPosts(userId: number): Promise<ScheduledPost[]> {
+    const { data, error } = await this.db
+      .from("scheduled_posts")
+      .select("*")
+      .eq("telegram_user_id", userId)
+      .in("status", ["pending", "processing"])
+      .order("scheduled_for", { ascending: true })
+    if (error) throw new Error(`schedule lookup failed: ${error.message}`)
+    return (data ?? []) as ScheduledPost[]
+  }
+
+  async cancelScheduledPost(id: string, userId: number): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("scheduled_posts")
+      .update({ status: "cancelled" })
+      .eq("id", id)
+      .eq("telegram_user_id", userId)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle()
+    if (error) throw new Error(`schedule cancellation failed: ${error.message}`)
+    return Boolean(data)
   }
 
   async updatePostStatus(postId: string, status: string): Promise<void> {

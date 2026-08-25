@@ -71,29 +71,13 @@ Button fields:
 Validate URL:
 - Must be absolute HTTPS URL for normal web links.
 - Allow tg:// only if explicitly supported by implementation.
-- WhatsApp links should be generated safely from phone + prefilled message.
 
 ### Button layout
 Support rows. Example:
 
 [🛒 Buy Now] [🌐 Website]
-[💬 WhatsApp]
 
 User chooses one or two buttons per row in V1.
-
-### WhatsApp button generator
-Inputs:
-- Country/phone number
-- Optional prefilled message
-
-Normalize phone number:
-- Remove spaces, +, hyphens, brackets.
-- Store/send international digits only.
-- Validate reasonable length.
-Generate:
-https://wa.me/<digits>?text=<encodeURIComponent(message)>
-
-The URL must be hidden behind Telegram's inline button.
 
 ### Step 4 — Preview
 Render an actual Telegram-style preview:
